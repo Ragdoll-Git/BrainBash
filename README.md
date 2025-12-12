@@ -34,6 +34,13 @@ El script es **idempotente** (se puede ejecutar varias veces sin romper nada) y 
 
 ## 🛠️ Instalación y Uso
 
+### ⚡ Instalación Rápida
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/Ragdoll-Git/DeployEnvDebian/main/deployPublic.sh)
+```
+
+### 📦 Instalación Manual
+
 1.  **Clonar el repositorio** (o descargar el script):
     ```bash
     git clone <URL_DEL_REPOSITORIO>
