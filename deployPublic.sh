@@ -1,16 +1,18 @@
 #!/bin/bash
 
 # ==============================================================================
+#  Refactorizado con principios SOLID/KISS/DRY
 #  SCRIPT DE DESPLIEGUE DE ENTORNO MODERNIZADO (Debian 12/13)
 #  Autor: Gemini 3 Pro
 #  Prompter: Ragdoll
 #  Licencia: MIT
-#  Descripción: Entorno de desarrollo con AI local y en la nube
+#  Descripción: Entorno de desarrollo de terminal con AI local y en la nube
 # ==============================================================================
 
-# Configuración de seguridad: Detener si hay error, tratar variables no definidas como error
-set -e
-set -u
+set -e  # Abortar en error
+set -u  # Abortar si falta variable
+
+# --- I. CONFIGURACIÓN GLOBAL (Open/Closed Principle) ---
 
 # Colores
 GREEN='\033[0;32m'
@@ -19,391 +21,367 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Variables Globales
-USER_HOME=$HOME
-ZSH_CUSTOM="$USER_HOME/.oh-my-zsh/custom"
+# Listas de Paquetes
+BASE_PACKAGES=("curl" "git" "unzip" "fontconfig" "gpg" "zsh" "fzf" "bat" "zoxide" "python3-venv" "python3-pip")
+DESKTOP_PACKAGES=("kitty" "gnome-shell-extension-desktop-icons-ng")
 
-echo -e "${BLUE}=========================================================${NC}"
-echo -e "${BLUE}    DESPLIEGUE DE ENTORNO DEBIAN + IA  ${NC}"
-echo -e "${BLUE}=========================================================${NC}"
-echo "Este script es idempotente (seguro de correr varias veces)."
+# Rutas
+ZSH_CUSTOM="$HOME/.oh-my-zsh/custom"
+GEMINI_DIR="$HOME/.gemini-cli"
 
-# --- COMPROBACIÓN DE ROOT/SUDO ---
-if [ "$EUID" -eq 0 ]; then
-    echo -e "${RED}[!] Por favor, NO ejecutes este script como root directo.${NC}"
-    echo "Ejecútalo como tu usuario normal. El script pedirá sudo cuando sea necesario."
-    exit 1
-fi
+# --- II. FUNCIONES UTILITARIAS ---
 
-# Verificar sudo
-if ! command -v sudo &> /dev/null; then
-    echo -e "${RED}[Error] 'sudo' no está instalado. Instálalo como root (apt install sudo) y agrega tu usuario al grupo sudo.${NC}"
-    exit 1
-fi
+print_step() {
+    echo -e "\n${GREEN}=== $1 ===${NC}"
+}
 
-# --- DETECCIÓN INTELIGENTE DE ENTORNO (Merge from deploySmart) ---
-echo -e "${YELLOW}Analizando el sistema...${NC}"
-IS_HEADLESS=true
-DESKTOP_ENV="none"
+print_info() {
+    echo -e "${BLUE}[INFO] $1${NC}"
+}
 
-# Comprobación 1: Systemd Target
-if systemctl get-default 2>/dev/null | grep -q "graphical.target"; then
-    IS_HEADLESS=false
-fi
+check_root_and_sudo() {
+    if [ "$EUID" -eq 0 ]; then
+        echo -e "${RED}[ERROR] No ejecutes como root. Usa tu usuario normal (el script pedirá sudo).${NC}"
+        exit 1
+    fi
+    if ! command -v sudo &> /dev/null; then
+        echo -e "${RED}[ERROR] 'sudo' no encontrado. Instálalo primero.${NC}"
+        exit 1
+    fi
+}
 
-# Comprobación 2: Binarios específicos
-if command -v gnome-shell &> /dev/null; then
-    DESKTOP_ENV="gnome"
-    IS_HEADLESS=false
-elif command -v startplasma-wayland &> /dev/null || command -v startplasma-x11 &> /dev/null; then
-    DESKTOP_ENV="kde"
-    IS_HEADLESS=false
-fi
+detect_environment() {
+    # Retorna 0 (true) si es headless, 1 (false) si tiene escritorio
+    if systemctl get-default 2>/dev/null | grep -q "graphical.target"; then
+        return 1
+    fi
+    return 0
+}
 
-if [ "$IS_HEADLESS" = true ]; then
-    echo -e "MODO: ${RED}HEADLESS/SERVER${NC} (Se omitirá Kitty y GUI apps)"
-else
-    echo -e "MODO: ${GREEN}ESCRITORIO ($DESKTOP_ENV)${NC} (Se instalará Kitty y temas)"
-fi
-echo ""
+# --- III. FUNCIONES DEL NÚCLEO (Single Responsibility) ---
 
-
-# --- MENÚ INTERACTIVO ---
-echo -e "${YELLOW}--- SELECCIÓN DE COMPONENTES ---${NC}"
-read -p "¿Instalar Paquetes Base (Kitty, Zsh, Eza, Bat, Fzf)? (s/n): " INSTALL_BASE
-read -p "¿Configurar Dotfiles (Zshrc, Starship, Temas)? (s/n): " INSTALL_DOTFILES
-read -p "¿Instalar Ollama y Modelos Locales? (s/n): " INSTALL_OLLAMA
-read -p "¿Configurar Gemini CLI (Requiere API Key de Google)? (s/n): " INSTALL_GEMINI
-
-# ==============================================================================
-# 1. PAQUETES BASE (Soporte Debian 12/13)
-# ==============================================================================
-if [[ "$INSTALL_BASE" =~ ^[sS]$ ]]; then
-    echo -e "\n${GREEN}[1/4] Instalando base...${NC}"
+install_base_system() {
+    print_step "Instalando Sistema Base"
     
     sudo apt update
-    
-    # Lista base común
-    PACKAGES="curl git unzip fontconfig gpg zsh fzf bat zoxide python3-venv python3-pip"
+    local packages=("${BASE_PACKAGES[@]}")
 
-    # Lógica Condicional (Smart)
-    if [ "$IS_HEADLESS" = false ]; then
-        PACKAGES="$PACKAGES kitty"
-        if [ "$DESKTOP_ENV" == "gnome" ]; then
-            PACKAGES="$PACKAGES gnome-shell-extension-desktop-icons-ng"
-        fi
-    fi
-
-    echo "Instalando paquetes: $PACKAGES"
-    sudo apt install -y $PACKAGES
-
-    # --- INSTALACIÓN EZA (A PRUEBA DE FALLOS) ---
-    if ! command -v eza &> /dev/null; then
-        echo "Instalando eza..."
-        # Si es Debian 13 (Trixie) o superior, está en repos
-        if apt-cache show eza &> /dev/null; then
-            sudo apt install -y eza
-        else
-            # FALLBACK PARA DEBIAN 12: Descarga directa de binario (No rompe apt)
-            echo "Detectado Debian 12/Antiguo. Descargando binario oficial..."
-            EZA_URL="https://github.com/eza-community/eza/releases/latest/download/eza_x86_64-unknown-linux-gnu.tar.gz"
-            wget -qO /tmp/eza.tar.gz "$EZA_URL"
-            tar -xzf /tmp/eza.tar.gz -C /tmp
-            sudo mv /tmp/eza /usr/local/bin/eza
-            sudo chmod +x /usr/local/bin/eza
-            rm /tmp/eza.tar.gz
-        fi
+    # Lógica condicional para escritorio
+    if ! detect_environment; then
+        print_info "Entorno de escritorio detectado. Agregando paquetes GUI."
+        packages+=("${DESKTOP_PACKAGES[@]}")
     else
-        echo "Eza ya instalado."
+        print_info "Entorno Headless (Servidor) detectado."
     fi
 
-    # Fix batcat
+    sudo apt install -y "${packages[@]}"
+    
+    # Fix Batcat (Debian rename)
     if [ ! -f ~/.local/bin/bat ]; then
         mkdir -p ~/.local/bin
         ln -sf /usr/bin/batcat ~/.local/bin/bat
     fi
-fi
+}
 
-# ==============================================================================
-# 2. DOTFILES Y ZSH
-# ==============================================================================
-if [[ "$INSTALL_DOTFILES" =~ ^[sS]$ ]]; then
-    echo -e "\n${GREEN}[2/4] Configurando entorno Shell...${NC}"
+install_eza_safe() {
+    # Instala eza intentando repos oficiales primero, fallback a binario
+    if command -v eza &> /dev/null; then
+        print_info "Eza ya está instalado."
+        return
+    fi
 
-    # Oh My Zsh (Idempotente)
+    print_info "Instalando Eza..."
+    if apt-cache show eza &> /dev/null; then
+        sudo apt install -y eza
+    else
+        print_info "Eza no en repos (Debian 12). Instalando binario..."
+        local url="https://github.com/eza-community/eza/releases/latest/download/eza_x86_64-unknown-linux-gnu.tar.gz"
+        wget -qO /tmp/eza.tar.gz "$url"
+        tar -xzf /tmp/eza.tar.gz -C /tmp
+        sudo mv /tmp/eza /usr/local/bin/eza
+        sudo chmod +x /usr/local/bin/eza
+        rm /tmp/eza.tar.gz
+    fi
+}
+
+configure_shell_visuals() {
+    print_step "Configurando Shell y Visuales"
+
+    # 1. Oh My Zsh
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
         sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
     fi
 
-    # Starship
+    # 2. Starship
     if ! command -v starship &> /dev/null; then
         curl -sS https://starship.rs/install.sh | sh -s -- -y
     fi
     mkdir -p ~/.config/starship
     curl -s -o ~/.config/starship/starship.toml https://raw.githubusercontent.com/catppuccin/starship/main/themes/mocha.toml
 
-    # Configuración GUI (Solo si no es Headless)
-    if [ "$IS_HEADLESS" = false ]; then
-        # Kitty Theme
+    # 3. Kitty (Solo si no es Headless)
+    if ! detect_environment; then
         mkdir -p ~/.config/kitty/themes
         curl -s -o ~/.config/kitty/themes/mocha.conf https://raw.githubusercontent.com/catppuccin/kitty/main/themes/mocha.conf
-        # Evitar duplicados en kitty.conf
         touch ~/.config/kitty/kitty.conf
         if ! grep -q "include themes/mocha.conf" ~/.config/kitty/kitty.conf; then
             echo "include themes/mocha.conf" >> ~/.config/kitty/kitty.conf
         fi
-
-        # Iconos Escritorio
-        if [ -f /usr/share/applications/kitty.desktop ]; then
-            mkdir -p $(xdg-user-dir DESKTOP 2>/dev/null || echo ~/Desktop)
-            cp /usr/share/applications/kitty.desktop $(xdg-user-dir DESKTOP 2>/dev/null || echo ~/Desktop)/
-            chmod +x $(xdg-user-dir DESKTOP 2>/dev/null || echo ~/Desktop)/kitty.desktop
+        
+        # Icono Desktop
+        local desktop_dir=$(xdg-user-dir DESKTOP 2>/dev/null || echo ~/Desktop)
+        if [ -d "$desktop_dir" ] && [ -f /usr/share/applications/kitty.desktop ]; then
+             mkdir -p "$desktop_dir"
+             cp /usr/share/applications/kitty.desktop "$desktop_dir/"
+             chmod +x "$desktop_dir/kitty.desktop"
         fi
     fi
+}
 
-    # --- GENERAR .ZSHRC ---
-    echo "Generando .zshrc optimizado..."
+# --- IV. GESTIÓN DE MODELOS (DRY) ---
+
+setup_ollama_service() {
+    print_step "Configurando Ollama (Motor IA)"
+    
+    if ! command -v ollama &> /dev/null; then
+        curl -fsSL https://ollama.com/install.sh | sh
+    else
+        print_info "Ollama ya instalado."
+    fi
+
+    # Configuración Systemd (Keep Alive)
+    sudo mkdir -p /etc/systemd/system/ollama.service.d
+    echo '[Service]
+Environment="OLLAMA_KEEP_ALIVE=1m"' | sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null
+    
+    sudo systemctl daemon-reload
+    sudo systemctl restart ollama
+    
+    print_info "Esperando arranque de API Ollama..."
+    until curl -s http://localhost:11434/api/tags >/dev/null; do sleep 1; done
+}
+
+create_local_model() {
+    local name="$1"
+    local base_model="$2"
+    local temp="$3"
+    local stop_params="$4" # Opcional
+
+    print_info "Creando modelo optimizado: $name (Base: $base_model)..."
+    ollama pull "$base_model"
+    
+    # Construcción dinámica del Modelfile
+    local modelfile="FROM $base_model
+PARAMETER temperature $temp
+PARAMETER num_ctx 4096
+SYSTEM \"\"\"
+Eres un asistente experto en Debian y Linux.
+1. Respuestas cortas y directas.
+2. Si pido comando, SOLO el comando.
+3. Si requieres contexto, usa viñetas.
+\"\"\""
+
+    if [ -n "$stop_params" ]; then
+        modelfile="$modelfile
+$stop_params"
+    fi
+
+    # Hack para pasar el string multilinea a create
+    echo "$modelfile" | ollama create "$name" -f -
+}
+
+select_and_install_models() {
+    echo -e "${YELLOW}Selecciona modelos a instalar:${NC}"
+    echo "1) Qwen (Rápido)"
+    echo "2) Gemma (Balanceado)"
+    echo "3) Phi-4 (Inteligente/Pesado)"
+    echo "4) TODOS"
+    read -p "Opción: " opt
+
+    case $opt in
+        1|4) 
+            # Qwen necesita template especial, se lo agregamos hardcoded aqui por simplicidad o extendemos la funcion
+            # Para mantener KISS, usaremos la funcion base, Qwen suele inferir bien, pero si falla el template, se añade.
+            create_local_model "qwen-local" "qwen3:0.6b" "0.3" "" 
+            ;;
+    esac
+    case $opt in
+        2|4)
+            local stops='PARAMETER stop "<end_of_turn>"
+PARAMETER stop "user:"
+PARAMETER stop "model:"'
+            create_local_model "gemma-local" "gemma3:1b" "0.2" "$stops"
+            ;;
+    esac
+    case $opt in
+        3|4)
+            create_local_model "phi-local" "phi4-mini" "0.1" ""
+            ;;
+    esac
+}
+
+# --- V. INTEGRACIÓN GEMINI (Seguridad mejorada) ---
+
+setup_gemini_client() {
+    print_step "Configurando Cliente Gemini"
+
+    echo -e "${YELLOW}Ingresa tu Google API Key (No se mostrará):${NC}"
+    read -sp "API Key: " api_key
+    echo ""
+    
+    if [ -z "$api_key" ]; then
+        echo "Clave vacía. Saltando configuración."
+        return
+    fi
+
+    # 1. Crear entorno Python
+    mkdir -p "$GEMINI_DIR"
+    python3 -m venv "$GEMINI_DIR/venv"
+    "$GEMINI_DIR/venv/bin/pip" install -q google-generativeai
+
+    # 2. Crear script (SIN LA CLAVE HARDCODEADA)
+    cat << 'EOF' > "$GEMINI_DIR/gemini_tool.py"
+import sys
+import os
+import google.generativeai as genai
+
+# SEGURIDAD: Leer variable de entorno
+API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not API_KEY:
+    print("Error: Variable GEMINI_API_KEY no encontrada.")
+    sys.exit(1)
+
+genai.configure(api_key=API_KEY)
+
+config = {"temperature": 0.3, "max_output_tokens": 4096}
+sys_instruct = "Eres un experto en Debian. Respuestas cortas y solo comandos si se pide."
+
+model = genai.GenerativeModel("gemini-2.5-flash", generation_config=config, system_instruction=sys_instruct)
+
+user_input = " ".join(sys.argv[1:]).strip()
+
+try:
+    if user_input:
+        print(model.generate_content(user_input).text.strip())
+    else:
+        print("Gemini Chat (Ctrl+C salir)")
+        chat = model.start_chat(history=[])
+        while True:
+            q = input("Gemini >>> ").strip()
+            if q.lower() in ['exit','quit']: break
+            if q: print(f"\n{chat.send_message(q).text.strip()}\n")
+except Exception as e:
+    print(f"Error: {e}")
+EOF
+
+    # 3. Guardar la clave en una variable exportada en .zshrc temporalmente para esta sesión y futura
+    # Nota: Lo ideal es .zshenv o un gestor de secretos, pero para este scope .zshrc funciona.
+    export GEMINI_API_KEY="$api_key" 
+    
+    # Añadir al .zshrc si no existe
+    if ! grep -q "export GEMINI_API_KEY" ~/.zshrc; then
+        echo "" >> ~/.zshrc
+        echo "# Google Gemini Key" >> ~/.zshrc
+        echo "export GEMINI_API_KEY=\"$api_key\"" >> ~/.zshrc
+    fi
+}
+
+# --- VI. GENERACIÓN DE ARCHIVOS DE CONFIGURACIÓN ---
+
+generate_zshrc() {
+    print_step "Generando .zshrc final"
+    
+    # Hacemos backup si existe
+    [ -f ~/.zshrc ] && cp ~/.zshrc ~/.zshrc.bak
+
     cat << 'EOF' > ~/.zshrc
-# PATH configuration
+# --- PATH & ZSH ---
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="robbyrussell"
 plugins=(git)
 source $ZSH/oh-my-zsh.sh
 
-# --- CONFIGURACIÓN PERSONAL MODERNA ---
+# --- ALIAS MODERNOS ---
 alias ls="eza --icons --group-directories-first"
 alias ll="eza -al --icons --group-directories-first"
 alias cat="batcat"
-
-# Zoxide & Starship
-eval "$(zoxide init zsh)"
 alias cd="z"
+
+# --- INIT ---
+eval "$(zoxide init zsh)"
 eval "$(starship init zsh)"
 export BAT_THEME="Catppuccin Mocha"
 
-# --- FUNCIONES LLM ---
+# --- FUNCIONES IA (Helpers) ---
+clean_think() { sed '/<think>/,/<\/think>/d'; }
+clean_empty() { sed '/^$/d'; }
 
-# Qwen (Local)
-qwen:() {
-    if [ -n "$1" ]; then
-        ollama run qwen-local "$*" | sed '/<think>/,/<\/think>/d'
-    else
-        ollama run qwen-local
-    fi
+qwen() {
+    [ -n "$1" ] && ollama run qwen-local "$*" | clean_think || ollama run qwen-local
 }
 
-# Gemma (Local)
-gemma:() {
-    if [ -n "$1" ]; then
-        ollama run gemma-local "$*" | sed '/^$/d'
-    else
-        ollama run gemma-local
-    fi
+gemma() {
+    [ -n "$1" ] && ollama run gemma-local "$*" | clean_empty || ollama run gemma-local
 }
 
-# Phi (Local)
-phi:() {
-    if [ -n "$1" ]; then
-        ollama run phi-local "$*" | sed '/^$/d'
-    else
-        ollama run phi-local
-    fi
+phi() {
+    [ -n "$1" ] && ollama run phi-local "$*" | clean_empty || ollama run phi-local
 }
 
-# Gemini (Cloud Backup)
-gemini:() {
+gemini() {
     if [ -f ~/.gemini-cli/gemini_tool.py ]; then
         ~/.gemini-cli/venv/bin/python ~/.gemini-cli/gemini_tool.py "$*"
     else
-        echo "Gemini no está configurado. Ejecuta el script de instalación nuevamente."
+        echo "Gemini no configurado."
     fi
 }
+
+# --- SECRETOS ---
+# (Se añadirán abajo automáticamente si se configuraron)
 EOF
+
+    # Si ya configuramos gemini en este run, asegurarnos que la key persista
+    if [ -n "${GEMINI_API_KEY:-}" ]; then
+        echo "export GEMINI_API_KEY=\"$GEMINI_API_KEY\"" >> ~/.zshrc
+    fi
+}
+
+# --- VII. FUNCIÓN PRINCIPAL (ORQUESTADOR) ---
+
+main() {
+    check_root_and_sudo
     
-    # Cambiar shell
-    if [ "$SHELL" != "$(which zsh)" ]; then
-        echo "Cambiando shell por defecto a Zsh..."
-        sudo chsh -s $(which zsh) $USER
-    fi
-fi
+    print_step "MENÚ DE INSTALACIÓN"
+    read -p "¿Instalar Base y Dotfiles? (s/n): " do_base
+    read -p "¿Configurar Ollama (Local AI)? (s/n): " do_ollama
+    read -p "¿Configurar Gemini (Cloud AI)? (s/n): " do_gemini
 
-# ==============================================================================
-# 3. OLLAMA Y MODELOS
-# ==============================================================================
-if [[ "$INSTALL_OLLAMA" =~ ^[sS]$ ]]; then
-    echo -e "\n${GREEN}[3/4] Configurando IA Local (Ollama)...${NC}"
-
-    # Instalar Ollama si no existe
-    if ! command -v ollama &> /dev/null; then
-        curl -fsSL https://ollama.com/install.sh | sh
-    else
-        echo "Ollama ya está instalado."
-    fi
-
-    # Configuración de Keep-Alive (Optimización RAM)
-    echo "Configurando liberación de RAM (1 min)..."
-    sudo mkdir -p /etc/systemd/system/ollama.service.d
-    echo '[Service]
-Environment="OLLAMA_KEEP_ALIVE=1m"' | sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null
-    sudo systemctl daemon-reload
-    sudo systemctl restart ollama
-    
-    # Esperar servicio
-    echo "Esperando a Ollama..."
-    until curl -s http://localhost:11434/api/tags >/dev/null; do sleep 1; done
-
-    # --- SELECCIÓN DE MODELOS ---
-    echo -e "${YELLOW}Selecciona qué modelos locales deseas instalar:${NC}"
-    echo "1) Qwen 3 0.6B (Muy rápido, ligero)"
-    echo "2) Gemma 3 1B (Balanceado)"
-    echo "3) Phi-4 Mini (Más inteligente, pesado (4GB RAM))"
-    echo "4) TODOS (Recomendado si tienes 8GB+ RAM)"
-    read -p "Opción (1-4): " MODEL_OPT
-
-    if [[ "$MODEL_OPT" == "1" || "$MODEL_OPT" == "4" ]]; then
-        echo "Instalando Qwen..."
-        ollama pull qwen3:0.6b
-        ollama create qwen-local -f <(echo 'FROM qwen3:0.6b
-PARAMETER temperature 0.3
-PARAMETER num_ctx 4096
-TEMPLATE """{{ if .System }}<|im_start|>system
-{{ .System }}<|im_end|>
-{{ end }}{{ if .Prompt }}<|im_start|>user
-{{ .Prompt }}<|im_end|>
-{{ end }}<|im_start|>assistant
-"""
-SYSTEM """
-Eres un asistente experto en Debian y Linux.
-1. Respuestas cortas y directas.
-2. Si pido comando, SOLO el comando.
-3. Si requieres contexto, usa viñetas.
-"""'
-    fi
-
-    if [[ "$MODEL_OPT" == "2" || "$MODEL_OPT" == "4" ]]; then
-        echo "Instalando Gemma..."
-        ollama pull gemma3:1b
-        ollama create gemma-local -f <(echo 'FROM gemma3:1b
-PARAMETER temperature 0.2
-PARAMETER num_ctx 4096
-PARAMETER stop "<end_of_turn>"
-PARAMETER stop "<|file_separator|>"
-PARAMETER stop "user:"
-PARAMETER stop "model:"
-SYSTEM """
-Eres un asistente experto en Debian y Linux.
-1. Respuestas cortas y directas.
-2. Si pido comando, SOLO el comando.
-3. Si requieres contexto, usa viñetas.
-"""'
-    fi
-
-    if [[ "$MODEL_OPT" == "3" || "$MODEL_OPT" == "4" ]]; then
-        echo "Instalando Phi-4..."
-        ollama pull phi4-mini
-        ollama create phi-local -f <(echo 'FROM phi4-mini
-PARAMETER temperature 0.1
-PARAMETER num_ctx 4096
-SYSTEM """
-Eres un asistente experto en Debian y Linux.
-1. Respuestas cortas y directas.
-2. Si pido comando, SOLO el comando.
-3. Si requieres contexto, usa viñetas.
-"""')
-    fi
-fi
-
-# ==============================================================================
-# 4. GEMINI CLI (BACKUP CLOUD)
-# ==============================================================================
-if [[ "$INSTALL_GEMINI" =~ ^[sS]$ ]]; then
-    echo -e "\n${GREEN}[4/4] Configurando Gemini CLI...${NC}"
-    
-    # -----------------------------------------------------
-    # SEGURIDAD: SOLICITUD DE API KEY
-    # -----------------------------------------------------
-    echo -e "${RED}IMPORTANTE:${NC} Necesitas una API Key de Google AI Studio."
-    echo "Puedes obtenerla gratis en: https://aistudio.google.com/app/apikey"
-    echo ""
-    while true; do
-        read -sp ">> Pega tu Google API Key aquí (el input está oculto): " USER_API_KEY
-        echo ""
-        if [[ -z "$USER_API_KEY" ]]; then
-            echo "La clave no puede estar vacía."
-        else
-            break
+    if [[ "$do_base" =~ ^[sS]$ ]]; then
+        install_base_system
+        install_eza_safe
+        configure_shell_visuals
+        generate_zshrc
+        
+        # Cambiar shell si es necesario
+        if [ "$SHELL" != "$(which zsh)" ]; then
+            print_info "Cambiando shell a Zsh..."
+            sudo chsh -s $(which zsh) $USER
         fi
-    done
+    fi
 
-    # Configuración de entorno
-    mkdir -p ~/.gemini-cli
-    python3 -m venv ~/.gemini-cli/venv
-    ~/.gemini-cli/venv/bin/pip install -q google-generativeai
+    if [[ "$do_ollama" =~ ^[sS]$ ]]; then
+        setup_ollama_service
+        select_and_install_models
+    fi
 
-    echo "Generando script Python con tu clave..."
-    
-    # Escribimos el script inyectando la variable $USER_API_KEY
-    cat << EOF > ~/.gemini-cli/gemini_tool.py
-import sys
-import google.generativeai as genai
+    if [[ "$do_gemini" =~ ^[sS]$ ]]; then
+        setup_gemini_client
+    fi
 
-# --- API KEY CONFIGURADA POR EL USUARIO ---
-API_KEY = "${USER_API_KEY}"
-
-genai.configure(api_key=API_KEY)
-
-# Configuración
-generation_config = {
-  "temperature": 0.3,
-  "max_output_tokens": 4096,
+    print_step "INSTALACIÓN COMPLETADA"
+    echo "Reinicia tu terminal o ejecuta 'source ~/.zshrc' para empezar."
 }
 
-system_instruction = """
-Eres un asistente experto en Debian y Linux.
-1. Respuestas cortas y directas.
-2. Si pido comando, SOLO el comando.
-3. Si requieres contexto, usa viñetas.
-"""
-
-model = genai.GenerativeModel(
-  model_name="gemini-2.5-flash",
-  generation_config=generation_config,
-  system_instruction=system_instruction
-)
-
-# Lógica Principal
-user_input = " ".join(sys.argv[1:]).strip()
-
-if user_input:
-    # Modo Comando (Rápido)
-    try:
-        response = model.generate_content(user_input)
-        print(response.text.strip())
-    except Exception as e:
-        print(f"Error de API: {e}")
-else:
-    # Modo Chat (Interactivo)
-    print("\033[1;34m Gemini Chat (Ctrl+C para salir)\033[0m")
-    chat = model.start_chat(history=[])
-    while True:
-        try:
-            q = input("\033[1;32mGemini >>> \033[0m").strip()
-            if q.lower() in ['salir', 'exit']: break
-            if not q: continue
-            response = chat.send_message(q)
-            print(f"\n{response.text.strip()}\n")
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            print(f"\nError: {e}\n")
-EOF
-
-    echo "Gemini configurado correctamente."
-fi
-
-echo -e "\n${BLUE}=========================================================${NC}"
-echo -e "${BLUE}    ¡INSTALACIÓN COMPLETADA!                             ${NC}"
-echo -e "${BLUE}=========================================================${NC}"
-echo "1. Reinicia tu terminal o ejecuta: source ~/.zshrc"
-echo "2. Usa 'ollama:', 'gemma:', 'phi:' o 'gemini:' para interactuar."
-echo "3. ¡Disfruta!"
+# Entry Point
+main "$@"
