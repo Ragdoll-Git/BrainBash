@@ -1,0 +1,23 @@
+# config/starship.toml (Minimo)
+
+format = """
+$os$directory$git_branch$git_status$python$line_break$character
+"""
+
+[directory]
+style = "blue"
+truncation_length = 3
+truncate_to_repo = false
+
+[git_branch]
+style = "green"
+symbol = "🌱 "
+
+[python]
+symbol = "🐍 "
+
+[os]
+disabled = false
+symbols.Debian = "🍥 "
+symbols.Alpine = "🏔️ "
+symbols.Fedora = "🎩 "
