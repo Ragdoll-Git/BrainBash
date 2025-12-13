@@ -3,6 +3,8 @@
 ![Debian](https://img.shields.io/badge/Distro-Debian-red)
 ![Alpine](https://img.shields.io/badge/Distro-Alpine-blue)
 
+[![Test Multi-Distro Support](https://github.com/Ragdoll-Git/DeployEnvDebian/actions/workflows/test_distros.yml/badge.svg)](https://github.com/Ragdoll-Git/DeployEnvDebian/actions/workflows/test_distros.yml)
+
 Un sistema moderno y multiplataforma para automatizar la configuración de entornos Linux con instalación de paquetes y enlazado de dotfiles.
 
 ## 📋 Descripción
