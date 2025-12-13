@@ -3,9 +3,9 @@ name: Test Multi-Distro Support
 on:
   # 1. Ejecución automática al subir código
   push:
-    branches: [ "main" ]
+    branches: [ "AppPython" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "AppPython" ]
   
   # 2. Ejecución manual desde la web de GitHub
   workflow_dispatch:
