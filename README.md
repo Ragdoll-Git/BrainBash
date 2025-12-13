@@ -1,10 +1,13 @@
-# 🚀 DeployEnvDebian
+# 🚀 DeployEnvDebian (ahora agnóstico)
+![Python](https://img.shields.io/badge/Python-3.7%2B-blue)
+![Debian](https://img.shields.io/badge/Distro-Debian-red)
+![Alpine](https://img.shields.io/badge/Distro-Alpine-blue)
 
 Un sistema moderno y multiplataforma para automatizar la configuración de entornos Linux con instalación de paquetes y enlazado de dotfiles.
 
 ## 📋 Descripción
 
-**DeployEnvDebian** es un script inteligente de Python que detecta automáticamente tu distribución Linux y configura tu entorno de desarrollo con: 
+**DeployEnvDebian** es una software hecho en Python que despliega y configura tu entorno de desarrollo automáticamente, y detecta tu distribución Linux, realizando: 
 
 - ✅ Instalación automatizada de paquetes base
 - ✅ Enlazado de dotfiles personalizados (symlinks)
