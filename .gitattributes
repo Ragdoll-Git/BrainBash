@@ -1,0 +1,3 @@
+# Forzar a que los scripts de shell siempre usen saltos de línea LF, incluso si se edita en Windows.
+*.sh text eol=lf
+install.sh text eol=lf
