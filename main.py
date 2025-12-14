@@ -1,31 +1,51 @@
 #!/usr/bin/env python3
 import sys
 import os
-import argparse
 import subprocess
 import time
 from pathlib import Path
 
-# Importaciones del proyecto
+# Importaciones
 from src.managers import DebianManager, AlpineManager, FedoraManager
 from src.utils import Logger, Colors, TUI
 from src.dotfiles import DotfileManager
 
 # ==========================================
-# CONFIGURACION DE COMPONENTES
+# DEFINICIONES DE MENU Y DATOS
 # ==========================================
 
+# Modelos disponibles
 MODELS_MAP = {
-    "model_qwen": "qwen3:0.6b",         # Qwen 3 (0.6B)
-    "model_gemma": "gemma3:1b",         # Gemma 3 (1B Instruct)
-    "model_phi": "phi4:mini"            # Phi-4 Mini Instruct
+    "qwen": "qwen3:0.6b",
+    "gemma": "gemma3:1b",
+    "phi": "phi4:mini"
 }
 
-# Grupos de paquetes
-PKG_BASE = ["git", "curl", "zsh", "python-dev"]
+# Submenu: Paquetes Base
+# Formato: (TAG_TECNICO, DESCRIPCION, ESTADO_DEFAULT)
+MENU_BASE = [
+    ("git", "Git (Control de versiones)", "ON"),
+    ("zsh", "Zsh (Shell)", "ON"),
+    ("python-dev", "Python Dev + Pip", "ON"),
+    ("curl", "Curl", "ON")
+]
 
-PKG_MODERN = ["fzf", "bat", "eza", "btop", "tldr"] 
-PKG_SHELL = ["zoxide", "starship"]
+# Submenu: Paquetes Extra
+MENU_EXTRA = [
+    ("eza", "Eza (ls moderno)", "ON"),
+    ("bat", "Bat (cat moderno)", "ON"),
+    ("fzf", "Fzf (Buscador difuso)", "ON"),
+    ("tldr", "Tldr (Ayuda simplificada)", "ON"),
+    ("zoxide", "Zoxide (Navegacion inteligente)", "ON"),
+    ("starship", "Starship (Prompt)", "ON")
+]
+
+# Submenu: Modelos Local
+MENU_MODELS = [
+    ("qwen", "Qwen 3 (0.6B) - Ultraligero", "OFF"),
+    ("gemma", "Gemma 3 (1B) - Google", "OFF"),
+    ("phi", "Phi-4 (Mini) - Microsoft", "OFF")
+]
 
 DOTFILES_MAP = {
     "zshrc": ".zshrc",
@@ -34,162 +54,229 @@ DOTFILES_MAP = {
 }
 
 # ==========================================
-# FUNCIONES DE SOPORTE
+# FUNCIONES DE INSTALACION
 # ==========================================
 
 def get_manager():
-    """Detecta la distro y devuelve el gestor de paquetes adecuado"""
     try:
         with open("/etc/os-release") as f: data = f.read().lower()
         if "alpine" in data: return AlpineManager("alpine")
         if "fedora" in data: return FedoraManager("fedora")
         if "debian" in data or "ubuntu" in data: return DebianManager("debian")
-    except Exception:
-        pass
-    print("Error: Sistema operativo no detectado.")
+    except: pass
     sys.exit(1)
 
 def install_omz(logger):
-    """Instala Oh My Zsh si no existe"""
     if (Path.home() / ".oh-my-zsh").exists():
         logger.info("[Skip] Oh My Zsh ya instalado.")
         return
-    
     logger.info("Descargando Oh My Zsh...")
-    # Usamos --unattended para que no pida confirmación y bloquee el script
-    cmd = 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
-    subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    logger.success("Oh My Zsh instalado.")
+    subprocess.run('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended', 
+                   shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def setup_ollama(logger, selected_models):
-    """Instala el motor Ollama y descarga los modelos pedidos"""
-    # 1. Instalar Motor (si falta)
+    """Instala Ollama SOLO si hay modelos seleccionados"""
+    if not selected_models: return
+
+    # 1. Instalar Motor si falta
     if subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode != 0:
-        logger.step("Instalando Motor Ollama")
+        logger.step("Instalando Motor Ollama (Requerido para IA local)")
         subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True)
-    else:
-        logger.info("[Skip] Motor Ollama ya presente.")
-
-    if not selected_models:
-        return
-
-    logger.info("Esperando que el servicio de IA inicie...")
-    time.sleep(3) # Pausa técnica para asegurar que el daemon levante
     
     # 2. Descargar Modelos
+    logger.info("Verificando servicio IA...")
+    time.sleep(2)
+    
     for menu_id in selected_models:
-        ollama_tag = MODELS_MAP.get(menu_id)
-        if ollama_tag:
-            logger.step(f"IA: Descargando modelo {ollama_tag}")
+        tag = MODELS_MAP.get(menu_id)
+        if tag:
+            logger.step(f"IA Local: Descargando {tag}")
             try:
-                # check=False para que si falla uno (ej. mala conexión) no detenga todo el script
-                ret = subprocess.run(f"ollama pull {ollama_tag}", shell=True)
-                if ret.returncode == 0:
-                    logger.success(f"Modelo {ollama_tag} listo.")
-                else:
-                    logger.error(f"Error al descargar {ollama_tag}.")
-            except Exception as e:
-                logger.error(f"Fallo critico en IA: {e}")
+                subprocess.run(f"ollama pull {tag}", shell=True)
+            except:
+                logger.error(f"Fallo al descargar {tag}")
+
+def setup_gemini(logger):
+    """Configura el entorno para Gemini (Nube)"""
+    logger.step("Configurando Gemini (Google AI)")
+    
+    # Rutas para el entorno virtual
+    venv_path = Path.home() / ".gemini-cli" / "venv"
+    script_dest = Path.home() / ".gemini-cli" / "gemini_tool.py"
+    
+    # 1. Crear Venv
+    if not venv_path.exists():
+        logger.info("Creando entorno virtual Python...")
+        try:
+            subprocess.run(["python3", "-m", "venv", str(venv_path)], check=True)
+        except Exception as e:
+            logger.error(f"No se pudo crear venv. Asegurate de instalar python3-venv. Error: {e}")
+            return
+    
+    # 2. Instalar SDK de Google en el venv
+    logger.info("Instalando librería google-generativeai...")
+    pip_bin = venv_path / "bin" / "pip"
+    try:
+        subprocess.run([str(pip_bin), "install", "-q", "google-generativeai"], check=True)
+    except:
+        logger.error("Fallo pip install. Verifica tu internet.")
+        return
+    
+    # 3. Crear script de puente (Wrapper)
+    if not script_dest.exists():
+        script_dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(script_dest, "w") as f:
+            f.write("""
+import sys
+import os
+import google.generativeai as genai
+
+# Tu zshrc debe exportar esta variable
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    print("Error: Variable GEMINI_API_KEY no configurada.")
+    print("Edita tu ~/.zshrc y agrega: export GEMINI_API_KEY='tu_clave'")
+    sys.exit(1)
+
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-pro')
+
+if len(sys.argv) < 2:
+    print("Uso: gemini <pregunta>")
+    sys.exit(0)
+
+prompt = " ".join(sys.argv[1:])
+try:
+    response = model.generate_content(prompt)
+    print(response.text)
+except Exception as e:
+    print(f"Error de API: {e}")
+""")
+    
+    logger.success("Gemini configurado en ~/.gemini-cli/")
+    logger.info("IMPORTANTE: Obtén tu API Key en aistudio.google.com y agrégala a tu .zshrc")
 
 # ==========================================
-# PUNTO DE ENTRADA PRINCIPAL
+# MAIN LOOP
 # ==========================================
 
 def main():
     manager = get_manager()
     tui = TUI()
+    logger = Logger(Colors.BLUE)
 
-    # --- 1. CONFIGURACION VISUAL (Primer paso único) ---
-    Colors.preview_all()
-    theme_opts = [
-        (Colors.BLUE, "Azul (Debian)"), 
-        (Colors.GREEN, "Verde (Hacker)"),
-        (Colors.MAGENTA, "Magenta (Cyberpunk)"), 
-        (Colors.RED, "Rojo (Admin)")
-    ]
-    # Si TUI falla, usa Azul por defecto
-    try:
-        color = tui.show_menu("BrainBash", "Selecciona el color del instalador:", theme_opts)
-    except:
-        color = Colors.BLUE
+    # ESTADO INICIAL
+    state = {
+        "update_sys": False, # Por defecto NO actualiza
+        "pkgs_base": [x[0] for x in MENU_BASE],  # Por defecto todos ON
+        "pkgs_extra": [x[0] for x in MENU_EXTRA], # Por defecto todos ON
+        "models": [],       # Por defecto ningun modelo local
+        "use_gemini": True, # Gemini SI por defecto
+        "dotfiles": True    # Dotfiles SI por defecto
+    }
+
+    while True:
+        # Calcular textos para el menu principal
+        c_base = len(state["pkgs_base"])
+        c_extra = len(state["pkgs_extra"])
+        c_models = len(state["models"])
+        s_gemini = "SI" if state["use_gemini"] else "NO"
+        s_update = "SI" if state["update_sys"] else "NO"
+        s_dots = "SI" if state["dotfiles"] else "NO"
+
+        main_menu_opts = [
+            ("Actualizar sistema",  f"sudo apt update & upgrade     [{s_update}]"),
+            ("Archivos Base",       f"Git, Python, Zsh, Curl)       [{c_base} selecc]"),
+            ("Paquetes Extra",      f"Eza, Bat, Fzf, Tldr, Zoxide   [{c_extra} selecc]"),
+            ("Config personales",   f"Configuraciones personales    [{s_dots}]"),
+            ("IA Local",            f"Qwen, Gemma, Phi4             [{c_models} selecc]"),
+            ("IA Nube (respaldo)",  f"Gemini 2.5 flash              [{s_gemini}]"),
+            
+            ("INSTALACION", f">> INICIAR INSTALACION (ENTER)<<")
+        ]
+
+        selection = tui.show_menu("Menu Principal BrainBash", "Configura tu instalación:", main_menu_opts)
+
+        # --- LOGICA DE NAVEGACION ---
+        if selection == "update":
+            state["update_sys"] = not state["update_sys"]
+
+        elif selection == "base":
+            current_opts = []
+            for tag, desc, default in MENU_BASE:
+                status = "ON" if tag in state["pkgs_base"] else "OFF"
+                current_opts.append((tag, desc, status))
+            state["pkgs_base"] = tui.show_checklist("Paquetes Base", "Selecciona componentes esenciales:", current_opts)
+
+        elif selection == "extra":
+            current_opts = []
+            for tag, desc, default in MENU_EXTRA:
+                status = "ON" if tag in state["pkgs_extra"] else "OFF"
+                current_opts.append((tag, desc, status))
+            state["pkgs_extra"] = tui.show_checklist("Paquetes Extra", "Herramientas modernas CLI:", current_opts)
+
+        elif selection == "dots":
+            state["dotfiles"] = not state["dotfiles"]
+
+        elif selection == "models":
+            current_opts = []
+            for tag, desc, default in MENU_MODELS:
+                status = "ON" if tag in state["models"] else "OFF"
+                current_opts.append((tag, desc, status))
+            state["models"] = tui.show_checklist("IA Local", "Selecciona modelos (Ollama se instala automatico):", current_opts)
+
+        elif selection == "gemini":
+            state["use_gemini"] = not state["use_gemini"]
+
+        elif selection == "INSTALL":
+            break
         
-    logger = Logger(color)
+        elif selection is None: # Si cancela o cierra ventana
+            sys.exit(0)
 
-    # --- 2. MENU UNIFICADO (Checklist) ---
-    # Formato: (ID, Descripcion, EstadoDefault ["ON"/"OFF"])
-    menu_items = [
-        ("sys_base",   "Paquetes Base (Git, Zsh, Python)", "ON"),
-        ("sys_modern", "Modern CLI (Eza, Bat, htop)", "ON"),
-        ("sys_omz",    "Shell (Oh My Zsh + Starship)", "ON"),
-        ("dotfiles",   "Configs personalizadas", "ON"),
-        ("ai_engine",  "Motor IA (Ollama)", "OFF"),
-        ("model_qwen", "IA: Qwen 3 (0.6B) - Ultraligero (500MB RAM)", "OFF"),
-        ("model_gemma","IA: Gemma 3 (1B) - Balanceado (1.5GB RAM)", "OFF"),
-        ("model_phi",  "IA: Phi-4 (Mini) - Pesado (+4GB RAM)", "OFF")
-    ]
-
-    selection = tui.show_checklist(
-        "Menu Principal", 
-        "Espacio: Marcar/Desmarcar | Enter: Confirmar", 
-        menu_items
-    )
-
-    if not selection:
-        logger.info("No seleccionaste nada. Saliendo...")
-        sys.exit(0)
-
-    # --- 3. EJECUCION DE TAREAS ---
+    # ==========================================
+    # EJECUCION DE TAREAS (ORDEN ESPECIFICO)
+    # ==========================================
     
-    # A) Instalación de Paquetes
-    pkgs_to_install = []
-    if "sys_base" in selection: pkgs_to_install.extend(PKG_BASE)
-    if "sys_modern" in selection: pkgs_to_install.extend(PKG_MODERN)
-    if "sys_omz" in selection: pkgs_to_install.extend(PKG_SHELL)
+    logger.step("INICIANDO DESPLIEGUE")
 
-    if pkgs_to_install:
-        logger.step("Fase 1: Paquetes del Sistema")
-        try:
-            manager.update()
-            manager.install(pkgs_to_install)
-            logger.success("Paquetes instalados.")
-        except Exception as e:
-            logger.error(f"Error en paquetes: {e}")
-            # No salimos con sys.exit para intentar las siguientes fases
+    # 1. Update (Opcional)
+    if state["update_sys"]:
+        manager.update()
 
-    # B) Configuración de Shell (OMZ)
-    if "sys_omz" in selection:
-        logger.step("Fase 2: Configuración Shell")
+    # 2. Paquetes (Base + Extra combinados)
+    all_pkgs = state["pkgs_base"] + state["pkgs_extra"]
+    if all_pkgs:
+        logger.step("Fase 1: Instalando Paquetes")
+        manager.install(all_pkgs)
+
+    # 3. Shell (OMZ) - Se instala si seleccionó Zsh
+    if "zsh" in state["pkgs_base"]:
+        logger.step("Fase 2: Configurando Shell")
         install_omz(logger)
 
-    # C) Enlace de Dotfiles
-    if "dotfiles" in selection:
-        logger.step("Fase 3: Dotfiles")
-        
-        # CORRECCION: Usar la ruta real del script, no el CWD del usuario
-        # Esto asegura que encuentre la carpeta 'config' sin importar desde donde ejecutes
+    # 4. Dotfiles
+    if state["dotfiles"]:
+        logger.step("Fase 3: Aplicando Dotfiles")
         repo_root = Path(__file__).parent.resolve()
-        home_root = Path.home()
+        dm = DotfileManager(repo_root, Path.home())
         
-        dm = DotfileManager(repo_root, home_root)
         for src, dest in DOTFILES_MAP.items():
             dm.link(f"config/{src}", dest)
-        logger.success("Enlaces creados.")
+        logger.success("Configs aplicadas.")
 
-    # D) Inteligencia Artificial
-    # Filtramos qué modelos eligió el usuario
-    ai_models_selected = [x for x in selection if x.startswith("model_")]
-    
-    # Si eligió instalar el motor O algún modelo, ejecutamos la fase IA
-    if "ai_engine" in selection or ai_models_selected:
-        logger.step("Fase 4: Inteligencia Artificial")
-        setup_ollama(logger, ai_models_selected)
+    # 5. IA Local (Ollama + Modelos) - Solo si seleccionó modelos
+    if state["models"]:
+        logger.step("Fase 4: IA Local")
+        setup_ollama(logger, state["models"])
 
-    logger.step("INSTALACION FINALIZADA")
-    logger.info("Por favor, reinicia tu terminal.")
+    # 6. IA Nube (Gemini)
+    if state["use_gemini"]:
+        setup_gemini(logger)
+
+    logger.step("FINALIZADO")
+    logger.info("Reinicia tu terminal.")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nCancelado por usuario.")
-        sys.exit(0)
+    try: main()
+    except KeyboardInterrupt: sys.exit(0)

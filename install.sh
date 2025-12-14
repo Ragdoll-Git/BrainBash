@@ -5,10 +5,10 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Iniciando Bootstrap de BrainBash ===${NC}"
+echo -e "${GREEN}=== Iniciando Bootstrap de BrainBash ===${NC}"
 
 # 1. Detectar gestor de paquetes e instalar dependencias mínimas (Git + Python)
-echo -e "${BLUE}[+] Verificando dependencias mínimas...${NC}"
+echo -e "${GREEN}[+] Verificando dependencias mínimas...${NC}"
 
 if [ -f /etc/debian_version ]; then
     # Debian / Ubuntu
@@ -33,11 +33,11 @@ INSTALL_DIR="$HOME/.brainbash-temp"
 rm -rf "$INSTALL_DIR"
 
 # 3. Clonar el repositorio
-echo -e "${BLUE}[+] Clonando BrainBash...${NC}"
+echo -e "${GREEN}[+] Clonando BrainBash...${NC}"
 git clone --depth=1 https://github.com/Ragdoll-Git/BrainBash.git "$INSTALL_DIR"
 
 # 4. Ejecutar el script principal (pasando argumentos si los hubo)
-echo -e "${BLUE}[+] Ejecutando instalador Python...${NC}"
+echo -e "${GREEN}[+] Ejecutando instalador Python...${NC}"
 cd "$INSTALL_DIR"
 
 # Pasamos todos los argumentos ($@) al script de python
