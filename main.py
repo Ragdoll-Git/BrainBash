@@ -137,64 +137,66 @@ def setup_ollama(logger, selected_models):
                 logger.error(f"Fallo al configurar {tag_alias}")
 
 def setup_gemini(logger):
-    """Configura el entorno para Gemini (Nube)"""
+    """Configura Gemini usando el script src/gemini_tool.py"""
     logger.step("Configurando Gemini (Google AI)")
     
-    # Rutas para el entorno virtual
-    venv_path = Path.home() / ".gemini-cli" / "venv"
-    script_dest = Path.home() / ".gemini-cli" / "gemini_tool.py"
+    # 1. Definir rutas
+    # Ubicacion del codigo fuente en tu proyecto
+    source_script = Path(__file__).parent / "src" / "gemini_tool.py"
     
-    # 1. Crear Venv
+    # Destinos
+    venv_path = Path.home() / ".gemini-cli" / "venv" 
+    bin_dir = Path.home() / ".local" / "bin"
+    dest_script = bin_dir / "gemini" 
+    
+    # Asegurar directorios
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    
+    if not source_script.exists():
+        logger.error(f"No se encontro el archivo fuente: {source_script}")
+        return
+
+    # 2. Crear Venv (si falta)
     if not venv_path.exists():
-        logger.info("Creando entorno virtual Python...")
+        logger.info("Creando entorno virtual...")
         try:
             subprocess.run(["python3", "-m", "venv", str(venv_path)], check=True)
         except Exception as e:
-            logger.error(f"No se pudo crear venv. Asegurate de instalar python3-venv. Error: {e}")
+            logger.error(f"Error creando venv: {e}")
             return
     
-    # 2. Instalar SDK de Google en el venv
-    logger.info("Instalando librería google-generativeai...")
+    # 3. Instalar librerias
+    logger.info("Instalando dependencias...")
     pip_bin = venv_path / "bin" / "pip"
+    python_bin = venv_path / "bin" / "python3"
+    
     try:
         subprocess.run([str(pip_bin), "install", "-q", "google-generativeai"], check=True)
     except:
-        logger.error("Fallo pip install. Verifica tu internet.")
+        logger.error("Fallo pip install.")
         return
     
-    # 3. Crear script de puente (Wrapper)
-    if not script_dest.exists():
-        script_dest.parent.mkdir(parents=True, exist_ok=True)
-        with open(script_dest, "w") as f:
-            f.write("""
-import sys
-import os
-import google.generativeai as genai
-
-# Tu zshrc debe exportar esta variable
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    print("Error: Variable GEMINI_API_KEY no configurada.")
-    print("Edita tu ~/.zshrc y agrega: export GEMINI_API_KEY='tu_clave'")
-    sys.exit(1)
-
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-pro')
-
-if len(sys.argv) < 2:
-    print("Uso: gemini <pregunta>")
-    sys.exit(0)
-
-prompt = " ".join(sys.argv[1:])
-try:
-    response = model.generate_content(prompt)
-    print(response.text)
-except Exception as e:
-    print(f"Error de API: {e}")
-""")
-    
-    logger.success("Gemini configurado en ~/.gemini-cli/")
-    logger.info("IMPORTANTE: Obtén tu API Key en aistudio.google.com y agrégala a tu .zshrc")
+    # 4. Instalar el script con el Shebang Magico
+    logger.info("Instalando script ejecutable...")
+    try:
+        # Leemos tu codigo original
+        with open(source_script, "r") as f:
+            original_code = f.read()
+            
+        # Le agregamos la linea que le dice "Usa el Python del venv"
+        shebang = f"#!{python_bin}\n"
+        final_content = shebang + original_code
+        
+        # Escribimos en ~/.local/bin/gemini
+        with open(dest_script, "w") as f:
+            f.write(final_content)
+            
+        # Hacemos ejecutable
+        dest_script.chmod(0o755)
+        logger.success("Gemini instalado correctamente.")
+        
+    except Exception as e:
+        logger.error(f"Error al instalar script: {e}")
 
 # ==========================================
 # MAIN LOOP

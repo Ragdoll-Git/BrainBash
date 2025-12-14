@@ -1,0 +1,50 @@
+import sys
+import os
+import google.generativeai as genai # type: ignore
+
+# Tu zshrc debe exportar esta variable
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    print("Error: Variable GEMINI_API_KEY no configurada.")
+    print("Edita tu ~/.zshrc y agrega: export GEMINI_API_KEY='tu_clave'")
+    sys.exit(1)
+
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-2.5-flash')
+
+# MODO 1: Comando directo (gemini: "pregunta")
+if len(sys.argv) > 1:
+    prompt = " ".join(sys.argv[1:])
+    try:
+        response = model.generate_content(prompt)
+        print(response.text)
+    except Exception as e:
+        print(f"Error de API: {e}")
+
+# MODO 2: Chat Interactivo (gemini:)
+else:
+    chat = model.start_chat(history=[])
+    # Usamos codigos ANSI directos para colores, o podrias importar tu clase Colors
+    print("\033[1;34m--- Chat Gemini (Nube) ---\033[0m")
+    print("Escribe 'exit' o 'quit' para salir.\n")
+
+    while True:
+        try:
+            user_input = input("\033[1;32mTu > \033[0m")
+            if user_input.lower() in ["exit", "quit"]:
+                break
+            if not user_input.strip():
+                continue
+            
+            # Efecto de streaming
+            response = chat.send_message(user_input, stream=True)
+            print("\033[1;34mGemini > \033[0m", end="", flush=True)
+            for chunk in response:
+                print(chunk.text, end="", flush=True)
+            print("\n")
+            
+        except KeyboardInterrupt:
+            print("\nSaliendo...")
+            break
+        except Exception as e:
+            print(f"\nError: {e}")
