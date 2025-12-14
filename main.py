@@ -1,14 +1,43 @@
 #!/usr/bin/env python3
+
+# ==========================================
+# IMPORTACIONES
+# ==========================================
+
 import sys
 import os
 import subprocess
 import time
-from pathlib import Path
 
-# Importaciones
+from pathlib import Path
 from src.managers import DebianManager, AlpineManager, FedoraManager
 from src.utils import Logger, Colors, TUI
 from src.dotfiles import DotfileManager
+
+# ==========================================
+# TEXTOS Y TRADUCCIONES DEL MENU (CONFIG)
+# ==========================================
+
+# 1. Definimos los textos visuales en variables
+TXT_UPDATE  = "Actualizar sistema"
+TXT_BASE    = "Archivos Base"
+TXT_EXTRA   = "Paquetes Extra"
+TXT_DOTS    = "Config personales"
+TXT_MODELS  = "IA Local"
+TXT_GEMINI  = "IA Nube (respaldo)"
+TXT_INSTALL = "INSTALACION"
+
+# 2. Creamos el mapa global usando esas variables
+# Esto mapea: Variable (Texto) -> ID Interno
+MENU_ACTION_MAP = {
+    TXT_UPDATE:  "update",
+    TXT_BASE:    "base",
+    TXT_EXTRA:   "extra",
+    TXT_DOTS:    "dots",
+    TXT_MODELS:  "models",
+    TXT_GEMINI:  "gemini",
+    TXT_INSTALL: "INSTALL"
+}
 
 # ==========================================
 # DEFINICIONES DE MENU Y DATOS
@@ -18,7 +47,7 @@ from src.dotfiles import DotfileManager
 MODELS_MAP = {
     "qwen": "qwen3:0.6b",
     "gemma": "gemma3:1b",
-    "phi": "phi4:mini"
+    "phi": "phi4-mini"
 }
 
 # Submenu: Paquetes Base
@@ -43,8 +72,8 @@ MENU_EXTRA = [
 # Submenu: Modelos Local
 MENU_MODELS = [
     ("qwen", "Qwen 3 (0.6B) - Ultraligero", "OFF"),
-    ("gemma", "Gemma 3 (1B) - Google", "OFF"),
-    ("phi", "Phi-4 (Mini) - Microsoft", "OFF")
+    ("gemma", "Gemma 3 (1B) - Balanceado ", "OFF"),
+    ("phi", "Phi-4 (Mini) - Pesado", "OFF")
 ]
 
 DOTFILES_MAP = {
@@ -175,6 +204,9 @@ def main():
         "dotfiles": True    # Dotfiles SI por defecto
     }
 
+    # Asegurate de que esto este definido arriba en tu archivo (Global o en main)
+    # MENU_ACTION_MAP = { TXT_UPDATE: "update", TXT_BASE: "base", ... etc }
+
     while True:
         # Calcular textos para el menu principal
         c_base = len(state["pkgs_base"])
@@ -185,35 +217,47 @@ def main():
         s_dots = "SI" if state["dotfiles"] else "NO"
 
         main_menu_opts = [
-            ("Actualizar sistema",  f"sudo apt update & upgrade     [{s_update}]"),
-            ("Archivos Base",       f"Git, Python, Zsh, Curl)       [{c_base} selecc]"),
-            ("Paquetes Extra",      f"Eza, Bat, Fzf, Tldr, Zoxide   [{c_extra} selecc]"),
-            ("Config personales",   f"Configuraciones personales    [{s_dots}]"),
-            ("IA Local",            f"Qwen, Gemma, Phi4             [{c_models} selecc]"),
-            ("IA Nube (respaldo)",  f"Gemini 2.5 flash              [{s_gemini}]"),
-            
-            ("INSTALACION", f">> INICIAR INSTALACION (ENTER)<<")
+            (TXT_UPDATE,  f"sudo apt update & upgrade     [{s_update}]"),
+            (TXT_BASE,    f"Git, Python, Zsh, Curl        [{c_base} selecc]"),
+            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide   [{c_extra} selecc]"),
+            (TXT_DOTS,    f"Configuraciones personales    [{s_dots}]"),
+            (TXT_MODELS,  f"Qwen, Gemma, Phi4             [{c_models} selecc]"),
+            (TXT_GEMINI,  f"Gemini 2.5 flash              [{s_gemini}]"),
+            (TXT_INSTALL, f">> INICIAR INSTALACION (ENTER)<<")
         ]
 
-        selection = tui.show_menu("Menu Principal BrainBash", "Configura tu instalación:", main_menu_opts)
+        # 1. Obtenemos el texto visible (Ej: "Actualizar sistema")
+        selection_text = tui.show_menu("Menu Principal BrainBash", "Configura tu instalación:", main_menu_opts)
+        
+        if selection_text is None:
+            sys.exit(0)
+
+        # 2. TRADUCCION: Convertimos texto visible a ID interno ("update", "base", etc)
+        # Esto es vital para que coincida con tus if de abajo
+        selection = MENU_ACTION_MAP.get(selection_text)
 
         # --- LOGICA DE NAVEGACION ---
+        
         if selection == "update":
             state["update_sys"] = not state["update_sys"]
 
         elif selection == "base":
             current_opts = []
             for tag, desc, default in MENU_BASE:
+                # CORRECCION: Usamos la clave correcta del state ("pkgs_base")
                 status = "ON" if tag in state["pkgs_base"] else "OFF"
                 current_opts.append((tag, desc, status))
-            state["pkgs_base"] = tui.show_checklist("Paquetes Base", "Selecciona componentes esenciales:", current_opts)
+            
+            # Guardamos en "pkgs_base", no en "Archivos Base"
+            state["pkgs_base"] = tui.show_checklist("Paquetes Base", "Selecciona componentes: |Espacio para seleccionar| |Enter para confirmar y volver|", current_opts)
 
         elif selection == "extra":
             current_opts = []
             for tag, desc, default in MENU_EXTRA:
+                # CORRECCION: Usamos "pkgs_extra"
                 status = "ON" if tag in state["pkgs_extra"] else "OFF"
                 current_opts.append((tag, desc, status))
-            state["pkgs_extra"] = tui.show_checklist("Paquetes Extra", "Herramientas modernas CLI:", current_opts)
+            state["pkgs_extra"] = tui.show_checklist("Paquetes Extra", "Herramientas modernas: |Espacio para seleccionar| |Enter para confirmar y volver|", current_opts)
 
         elif selection == "dots":
             state["dotfiles"] = not state["dotfiles"]
@@ -223,16 +267,13 @@ def main():
             for tag, desc, default in MENU_MODELS:
                 status = "ON" if tag in state["models"] else "OFF"
                 current_opts.append((tag, desc, status))
-            state["models"] = tui.show_checklist("IA Local", "Selecciona modelos (Ollama se instala automatico):", current_opts)
+            state["models"] = tui.show_checklist("IA Local", "Selecciona modelos: |Espacio para seleccionar| |Enter para confirmar y volver|", current_opts)
 
         elif selection == "gemini":
             state["use_gemini"] = not state["use_gemini"]
 
         elif selection == "INSTALL":
             break
-        
-        elif selection is None: # Si cancela o cierra ventana
-            sys.exit(0)
 
     # ==========================================
     # EJECUCION DE TAREAS (ORDEN ESPECIFICO)
@@ -275,7 +316,7 @@ def main():
         setup_gemini(logger)
 
     logger.step("FINALIZADO")
-    logger.info("Reinicia tu terminal.")
+    logger.info("Reinicia tu terminal para ver los cambios. Puede hacerlo con 'exit' o 'source ~/.zshrc', y despues 'zsh'.")
 
 if __name__ == "__main__":
     try: main()
