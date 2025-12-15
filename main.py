@@ -8,6 +8,7 @@ import sys
 import os
 import subprocess
 import time
+import textwrap
 
 from pathlib import Path
 from src.managers import DebianManager, AlpineManager, FedoraManager
@@ -79,7 +80,8 @@ MENU_MODELS = [
 DOTFILES_MAP = {
     "zshrc": ".zshrc",
     "kitty.conf": ".config/kitty/kitty.conf",
-    "starship.toml": ".config/starship.toml"
+    "starship.toml": ".config/starship.toml",
+    "context.md": ".config/brainbash/context.md"
 }
 
 # ==========================================
@@ -112,7 +114,18 @@ def setup_ollama(logger, selected_models):
         logger.step("Instalando Motor Ollama (Requerido para IA local)")
         subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True)
     
-    # 2. Descargar Modelos y crear alias
+    # 2. Leer contexto compartido
+    context_path = Path.home() / ".config" / "brainbash" / "context.md"
+    system_prompt = ""
+    if context_path.exists():
+        try:
+            with open(context_path, "r") as f:
+                system_prompt = f.read().strip()
+                logger.info("Contexto compartido cargado.")
+        except Exception as e:
+            logger.error(f"Error leyendo contexto: {e}")
+
+    # 3. Descargar Modelos y crear alias
     logger.info("Verificando servicio IA...")
     time.sleep(2)
     
@@ -129,9 +142,26 @@ def setup_ollama(logger, selected_models):
                 logger.info(f"Descargando base: {tag_original}...")
                 subprocess.run(f"ollama pull {tag_original}", shell=True, check=True)
                 
-                # 2. Crear el alias (cp) para que coincida con zshrc
-                logger.info(f"Creando alias: {tag_alias}...")
-                subprocess.run(f"ollama cp {tag_original} {tag_alias}", shell=True, check=True)
+                # 2. Crear Modelfile customizado con el system prompt
+                if system_prompt:
+                    logger.info(f"Creando {tag_alias} con contexto...")
+                    modelfile_content = textwrap.dedent(f"""
+                        FROM {tag_original}
+                        SYSTEM \"\"\"
+                        {system_prompt}
+                        \"\"\"
+                    """).strip()
+                    
+                    # Usamos un archivo temporal o pipeamos
+                    subprocess.run(
+                        ["ollama", "create", tag_alias, "-f", "-"],
+                        input=modelfile_content.encode('utf-8'),
+                        check=True
+                    )
+                else:
+                    # Fallback al viejo "cp" si no hay contexto
+                    logger.info(f"Creando alias (sin contexto): {tag_alias}...")
+                    subprocess.run(f"ollama cp {tag_original} {tag_alias}", shell=True, check=True)
                 
             except subprocess.CalledProcessError:
                 logger.error(f"Fallo al configurar {tag_alias}")
@@ -216,9 +246,6 @@ def main():
         "use_gemini": True, # Gemini SI por defecto
         "dotfiles": True    # Dotfiles SI por defecto
     }
-
-    # Asegurate de que esto este definido arriba en tu archivo (Global o en main)
-    # MENU_ACTION_MAP = { TXT_UPDATE: "update", TXT_BASE: "base", ... etc }
 
     while True:
         # Calcular textos para el menu principal

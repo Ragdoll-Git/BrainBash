@@ -9,8 +9,18 @@ if not api_key:
     print("Edita tu ~/.zshrc y agrega: export GEMINI_API_KEY='tu_clave'")
     sys.exit(1)
 
+# Leer contexto compartido si existe
+system_instruction = None
+context_path = os.path.expanduser("~/.config/brainbash/context.md")
+if os.path.exists(context_path):
+    try:
+        with open(context_path, "r") as f:
+            system_instruction = f.read().strip()
+    except:
+        pass
+
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_instruction)
 
 # MODO 1: Comando directo (gemini: "pregunta")
 if len(sys.argv) > 1:
