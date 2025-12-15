@@ -48,7 +48,7 @@ MENU_ACTION_MAP = {
 MODELS_MAP = {
     "qwen": "qwen3:0.6b",
     "gemma": "gemma3:1b",
-    "phi": "phi4-mini"
+    "phi": "phi4-mini:latest"
 }
 
 # Submenu: Paquetes Base
@@ -64,6 +64,7 @@ MENU_BASE = [
 MENU_EXTRA = [
     ("eza", "Eza (ls moderno)", "ON"),
     ("bat", "Bat (cat moderno)", "ON"),
+    ("htop", "Htop (Monitor de recursos)", "ON"),
     ("fzf", "Fzf (Buscador difuso)", "ON"),
     ("tldr", "Tldr (Ayuda simplificada)", "ON"),
     ("zoxide", "Zoxide (Navegacion inteligente)", "ON"),
@@ -72,9 +73,9 @@ MENU_EXTRA = [
 
 # Submenu: Modelos Local
 MENU_MODELS = [
-    ("qwen", "Qwen 3 (0.6B) - Ultraligero", "OFF"),
-    ("gemma", "Gemma 3 (1B) - Balanceado ", "OFF"),
-    ("phi", "Phi-4 (Mini) - Pesado", "OFF")
+    ("qwen", "Qwen 3 (0.6B) - Ligero (523MB-40K)", "ON"),
+    ("gemma", "Gemma 3 (1B) - Balanceado (815MB-32K)", "OFF"),
+    ("phi", "Phi-4 Mini (3.84 B) - Pesado (2.5GB-128K)", "OFF")
 ]
 
 DOTFILES_MAP = {
@@ -112,8 +113,41 @@ def setup_ollama(logger, selected_models):
     # 1. Instalar Motor si falta
     if subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode != 0:
         logger.step("Instalando Motor Ollama (Requerido para IA local)")
-        subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True)
+        try:
+            subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
+        except subprocess.CalledProcessError:
+            logger.error("Fallo la instalacion de Ollama (Error de red?). Verifique su conexion.")
+            return
     
+    # 1.5. Asegurar servicio corriendo
+    def ensure_ollama_running():
+        # Check simple
+        if subprocess.run("ollama list", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            return True
+        
+        logger.info("Iniciando servidor Ollama...")
+        # Start in background
+        try:
+            # Usamos Popen para no bloquear
+            with open(os.devnull, 'w') as devnull:
+                subprocess.Popen(["ollama", "serve"], stdout=devnull, stderr=devnull)
+        except Exception as e:
+            logger.error(f"No se pudo iniciar Ollama: {e}")
+            return False
+
+        # Wait loop (max 10s)
+        logger.info("Esperando servicio...")
+        for _ in range(20):
+            time.sleep(0.5)
+            if subprocess.run("ollama list", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+                logger.success("Servidor Ollama iniciado.")
+                return True
+        return False
+
+    if not ensure_ollama_running():
+         logger.error("No se pudo conectar a Ollama. Ejecuta 'ollama serve' manualmente.")
+         return
+
     # 2. Leer contexto compartido
     context_path = Path.home() / ".config" / "brainbash" / "context.md"
     system_prompt = ""
@@ -142,7 +176,6 @@ def setup_ollama(logger, selected_models):
                 logger.info(f"Descargando base: {tag_original}...")
                 subprocess.run(f"ollama pull {tag_original}", shell=True, check=True)
                 
-                # 2. Crear Modelfile customizado con el system prompt
                 # 2. Crear Modelfile usando la plantilla
                 if system_prompt:
                     logger.info(f"Creando {tag_alias} con contexto...")
@@ -178,7 +211,6 @@ def setup_ollama(logger, selected_models):
                     subprocess.run(f"ollama cp {tag_original} {tag_alias}", shell=True, check=True)
                 
                 # 3. Crear wrapper (script ejecutable)
-                # Crea un archivo en ~/.local/bin/qwen que ejecuta "ollama run qwen-local $@"
                 bin_dir = Path.home() / ".local" / "bin"
                 bin_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -192,12 +224,37 @@ def setup_ollama(logger, selected_models):
                 # Hacer ejecutable (+x)
                 wrapper_path.chmod(0o755)
 
-            except subprocess.CalledProcessError:
-                logger.error(f"Fallo al configurar {tag_alias}")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Fallo al configurar {tag_alias}: {e}")
 
-def setup_gemini(logger):
+def setup_gemini(logger, tui):
     """Configura Gemini usando el script src/gemini_tool.py"""
     logger.step("Configurando Gemini (Google AI)")
+    
+    # 0. Preguntar por API Key
+    print("\n--- Configuracion de API Key ---")
+    print("Si tienes una API Key de Google Gemini, ingrésala ahora.")
+    print("Si no, presiona Enter para configurar después.")
+    api_key = input("API Key > ").strip()
+    
+    if api_key:
+        zshrc = Path.home() / ".zshrc"
+        try:
+            # Verificar si ya existe
+            content = ""
+            if zshrc.exists():
+                with open(zshrc, "r") as f: content = f.read()
+            
+            if "GEMINI_API_KEY" not in content:
+                with open(zshrc, "a") as f:
+                    f.write(f"\n# Gemini AI\nexport GEMINI_API_KEY='{api_key}'\n")
+                logger.success("API Key agregada a .zshrc")
+            else:
+                logger.info("Parece que ya tienes una API Key en .zshrc, no se sobreescribio.")
+        except Exception as e:
+            logger.error(f"Error guardando API Key: {e}")
+    else:
+        logger.info("Saltando configuración de Key. Recuerda agregarla manualmente luego en ~/.zshrc.")
     
     # 1. Definir rutas
     # Ubicacion del codigo fuente en tu proyecto
@@ -264,7 +321,7 @@ def setup_gemini(logger):
 def main():
     manager = get_manager()
     tui = TUI()
-    logger = Logger(Colors.BLUE)
+    logger = Logger(Colors.GREEN)
 
     # ESTADO INICIAL
     state = {
@@ -285,13 +342,14 @@ def main():
         s_update = "SI" if state["update_sys"] else "NO"
         s_dots = "SI" if state["dotfiles"] else "NO"
 
+        prefix = "sudo " if os.geteuid() != 0 else ""
         main_menu_opts = [
-            (TXT_UPDATE,  f"sudo apt update & upgrade     [{s_update}]"),
-            (TXT_BASE,    f"Git, Python, Zsh, Curl        [{c_base} selecc]"),
-            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide   [{c_extra} selecc]"),
-            (TXT_DOTS,    f"Configuraciones personales    [{s_dots}]"),
-            (TXT_MODELS,  f"Qwen, Gemma, Phi4             [{c_models} selecc]"),
-            (TXT_GEMINI,  f"Gemini 2.5 flash              [{s_gemini}]"),
+            (TXT_UPDATE,  f"{prefix}apt update & upgrade    [{s_update}]"),
+            (TXT_BASE,    f"Git, Python, Zsh, Curl          [{c_base} selecc]"),
+            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide     [{c_extra} selecc]"),
+            (TXT_DOTS,    f"Configuraciones personales      [{s_dots}]"),
+            (TXT_MODELS,  f"Qwen, Gemma, Phi4               [{c_models} selecc]"),
+            (TXT_GEMINI,  f"Gemini 2.5 flash                [{s_gemini}]"),
             (TXT_INSTALL, f">> INICIAR INSTALACION (ENTER)<<")
         ]
 
@@ -357,17 +415,17 @@ def main():
     # 2. Paquetes (Base + Extra combinados)
     all_pkgs = state["pkgs_base"] + state["pkgs_extra"]
     if all_pkgs:
-        logger.step("Fase 1: Instalando Paquetes")
+        logger.step("Instalando Paquetes")
         manager.install(all_pkgs)
 
     # 3. Shell (OMZ) - Se instala si seleccionó Zsh
     if "zsh" in state["pkgs_base"]:
-        logger.step("Fase 2: Configurando Shell")
+        logger.step("Configurando Shell")
         install_omz(logger)
 
     # 4. Dotfiles
     if state["dotfiles"]:
-        logger.step("Fase 3: Aplicando Dotfiles")
+        logger.step("Aplicando Config. Personales")
         repo_root = Path(__file__).parent.resolve()
         dm = DotfileManager(repo_root, Path.home())
         
@@ -375,17 +433,17 @@ def main():
             dm.link(f"config/{src}", dest)
         logger.success("Configs aplicadas.")
 
-    # 5. IA Local (Ollama + Modelos) - Solo si seleccionó modelos
+    # 5. IA Local (Ollama + Modelos)
     if state["models"]:
-        logger.step("Fase 4: IA Local")
+        logger.step("Configurando IA Local")
         setup_ollama(logger, state["models"])
 
     # 6. IA Nube (Gemini)
     if state["use_gemini"]:
-        setup_gemini(logger)
+        setup_gemini(logger, tui)
 
     logger.step("FINALIZADO")
-    logger.info("Reinicia tu terminal para ver los cambios. Puede hacerlo con 'exit' o 'source ~/.zshrc', y despues 'zsh'.")
+    logger.info("Reinicia tu terminal para ver los cambios. Puede hacerlo con 'exit', y despues 'zsh'.")
 
 if __name__ == "__main__":
     try: main()

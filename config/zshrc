@@ -3,7 +3,11 @@
 # ==============================================================================
 
 # Ruta de Oh My Zsh
+# Ruta de Oh My Zsh
 export ZSH="$HOME/.oh-my-zsh"
+
+# Asegurar que ~/.local/bin este en el PATH
+export PATH="$HOME/.local/bin:$PATH"
 
 # Tema (puedes cambiarlo si usas Starship, este es el fallback)
 ZSH_THEME="robbyrussell"
@@ -35,9 +39,6 @@ fi
 
 # Tema para Bat
 export BAT_THEME="Catppuccin Mocha"
-
-# Clave de API de Gemini (El instalador de Python la inyectara aqui si se configura)
-# export GEMINI_API_KEY="tu_clave_aqui"
 
 # ==============================================================================
 # FUNCIONES DE IA (Ollama + Gemini)
@@ -82,8 +83,8 @@ phi:() {
 # --- GEMINI (Nube - Respaldo) ---
 # Uso: gemini: "pregunta" o solo gemini:
 gemini:() {
-    SCRIPT_PATH="$HOME/.gemini-cli/gemini_tool.py"
-    VENV_PYTHON="$HOME/.gemini-cli/venv/bin/python"
+    # El script se instala en ~/.local/bin/gemini
+    SCRIPT_PATH="$HOME/.local/bin/gemini"
     
     if [ ! -f "$SCRIPT_PATH" ]; then
         echo "[Error] Gemini no esta configurado. Ejecuta el instalador nuevamente."
@@ -92,13 +93,12 @@ gemini:() {
 
     if [ -n "$1" ]; then
         # Modo pregunta directa
-        "$VENV_PYTHON" "$SCRIPT_PATH" "$*"
+        "$SCRIPT_PATH" "$*"
     else
-        # Modo chat (Simulado: Gemini API es stateless por defecto, 
-        # aqui solo pedimos input si el script python soporta loop, 
-        # o simplemente avisamos al usuario)
-        echo "Escribe tu pregunta para Gemini:"
-        read -r PREGUNTA
-        "$VENV_PYTHON" "$SCRIPT_PATH" "$PREGUNTA"
+        # Modo chat interactivo
+        "$SCRIPT_PATH"
     fi
 }
+
+# Gemini AI
+export GEMINI_API_KEY=''

@@ -12,10 +12,10 @@ class DebianManager(PackageManager):
     def update(self):
         print("[Debian] Ejecutando actualización completa del sistema...")
         try:
-            # Update (Listas) + Upgrade (Paquetes) + Autoremove (Limpieza)
-            subprocess.run(["sudo", "apt", "update"], check=True)
-            subprocess.run(["sudo", "apt", "upgrade", "-y"], check=True)
-            subprocess.run(["sudo", "apt", "autoremove", "-y"], check=True)
+            # sudo apt update && sudo apt upgrade -y && sudo apt autoremove -y
+            subprocess.run(self.sudo_cmd + ["apt", "update"], check=True)
+            subprocess.run(self.sudo_cmd + ["apt", "upgrade", "-y"], check=True)
+            subprocess.run(self.sudo_cmd + ["apt", "autoremove", "-y"], check=True)
         except subprocess.CalledProcessError:
             print("[Error] Falló la actualización. Continuando bajo su propio riesgo...")
 
@@ -24,7 +24,7 @@ class DebianManager(PackageManager):
         manual_packages = []
         
         # Mapeo de herramientas modernas a instalación manual
-        modern_tools = ["eza", "bat", "htop", "fzf", "starship", "zoxide", "tldr"]
+        modern_tools = ["eza", "bat", "fzf", "starship", "zoxide", "tldr"]
 
         for pkg in packages:
             # Mapeamos nombre generico a nombre de distro
@@ -43,7 +43,7 @@ class DebianManager(PackageManager):
             to_install = list(set(apt_packages + extras))
             print(f"[APT] Instalando: {', '.join(to_install)}")
             try:
-                subprocess.run(["sudo", "apt", "install", "-y"] + to_install, check=True)
+                subprocess.run(self.sudo_cmd + ["apt", "install", "-y"] + to_install, check=True)
             except subprocess.CalledProcessError:
                 print("[Error] Fallo APT.")
 
@@ -93,28 +93,30 @@ class DebianManager(PackageManager):
         if temp_dir.exists(): shutil.rmtree(temp_dir)
         temp_dir.mkdir(exist_ok=True)
         
+        sudo_prefix = " ".join(self.sudo_cmd)
+        
         try:
             os.chdir(temp_dir)
             
             if tool == "eza":
                 if self._download_github_asset("eza-community/eza", ".tar.gz", "eza.tar.gz"):
                     subprocess.run("tar -xzf eza.tar.gz", shell=True)
-                    subprocess.run("sudo mv ./eza /usr/local/bin/", shell=True)
-                    subprocess.run("sudo chmod +x /usr/local/bin/eza", shell=True)
+                    subprocess.run(f"{sudo_prefix} mv ./eza /usr/local/bin/", shell=True)
+                    subprocess.run(f"{sudo_prefix} chmod +x /usr/local/bin/eza", shell=True)
             elif tool == "bat":
                 if self._download_github_asset("sharkdp/bat", ".tar.gz", "bat.tar.gz"):
                     subprocess.run("tar -xzf bat.tar.gz", shell=True)
-                    subprocess.run("sudo mv bat-*/bat /usr/local/bin/", shell=True)
-                    subprocess.run("sudo chmod +x /usr/local/bin/bat", shell=True)
+                    subprocess.run(f"{sudo_prefix} mv bat-*/bat /usr/local/bin/", shell=True)
+                    subprocess.run(f"{sudo_prefix} chmod +x /usr/local/bin/bat", shell=True)
             elif tool == "fzf":
                 if self._download_github_asset("junegunn/fzf", ".tar.gz", "fzf.tar.gz"):
                     subprocess.run("tar -xzf fzf.tar.gz", shell=True)
-                    subprocess.run("sudo mv fzf /usr/local/bin/", shell=True)
-                    subprocess.run("sudo chmod +x /usr/local/bin/fzf", shell=True)
+                    subprocess.run(f"{sudo_prefix} mv fzf /usr/local/bin/", shell=True)
+                    subprocess.run(f"{sudo_prefix} chmod +x /usr/local/bin/fzf", shell=True)
             elif tool == "tldr":
                 if self._download_github_asset("dbrgn/tealdeer", "linux", "tldr", allow_musl=True):
                     subprocess.run("chmod +x tldr", shell=True)
-                    subprocess.run("sudo mv tldr /usr/local/bin/", shell=True)
+                    subprocess.run(f"{sudo_prefix} mv tldr /usr/local/bin/", shell=True)
             elif tool == "starship":
                 subprocess.run("curl -sS https://starship.rs/install.sh | sh -s -- -y", shell=True)
             elif tool == "zoxide":

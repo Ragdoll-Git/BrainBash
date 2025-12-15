@@ -38,8 +38,7 @@ class TUI:
         if self.has_whiptail:
             return self._whiptail_checklist(title, prompt, options)
         else:
-            print("[Warn] Whiptail no instalado. Usando modo 'Instalar Todo' por defecto.")
-            return [opt[0] for opt in options]
+            return self._simple_checklist(title, prompt, options)
 
     def _whiptail_menu(self, title: str, prompt: str, options: List[Tuple[str, str]]) -> str:
         args = ["whiptail", "--title", title, "--menu", prompt, "20", "75", "10"]
@@ -74,6 +73,42 @@ class TUI:
         if sel.isdigit() and 1 <= int(sel) <= len(options):
             return options[int(sel)-1][0]
         return options[0][0]
+
+    def _simple_checklist(self, title: str, prompt: str, options: List[Tuple[str, str, str]]) -> List[str]:
+        # Convertimos las opciones a un diccionario mutable para el loop
+        # Format: (tag, desc, status)
+        selection_state = {tag: (status == "ON") for tag, _, status in options}
+        
+        while True:
+            print(f"\n=== {title} ===")
+            print(prompt)
+            print("-" * 40)
+            
+            # Mostrar opciones
+            opts_list = [] # Para poder acceder por indice
+            for i, (tag, desc, _) in enumerate(options):
+                is_selected = selection_state[tag]
+                mark = "[x]" if is_selected else "[ ]"
+                print(f"{i+1}) {mark} {desc}")
+                opts_list.append(tag)
+            
+            print("-" * 40)
+            print("Escribe el numero para alternar selección.")
+            print("C o Enter para confirmar y continuar.")
+            
+            inp = input("Opcion: ").strip().lower()
+            
+            if inp == "" or inp == "c":
+                break
+            
+            if inp.isdigit():
+                idx = int(inp) - 1
+                if 0 <= idx < len(opts_list):
+                    tag_toggled = opts_list[idx]
+                    selection_state[tag_toggled] = not selection_state[tag_toggled]
+        
+        # Retornamos solo los que quedaron en True
+        return [tag for tag, is_on in selection_state.items() if is_on]
 
 class Logger:
     def __init__(self, theme_color: str = Colors.BLUE):

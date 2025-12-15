@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List
 import shutil
 import subprocess
+import os
 
 # ==========================================
 # DICCIONARIO ROSETTA (Mapeo de Paquetes)
@@ -39,6 +40,11 @@ PACKAGE_MAP = {
 class PackageManager(ABC):
     def __init__(self, distro_id: str):
         self.distro_id = distro_id
+        self._sudo_cmd = [] if os.geteuid() == 0 else ["sudo"]
+        
+    @property
+    def sudo_cmd(self) -> List[str]:
+        return self._sudo_cmd
 
     def _get_mapped_name(self, generic_name: str) -> str:
         mapping = PACKAGE_MAP.get(generic_name, {})
