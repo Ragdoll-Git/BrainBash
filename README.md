@@ -5,9 +5,9 @@
 
 ## 📋 Descripción
 
-**BrainBash** es una aplicación modular escrita en **Python** que detecta automáticamente tu distribución Linux y configura tu entorno en minutos y agrega integracion con IA local y en la nube.
+**BrainBash** es una aplicación modular escrita en **Python** que detecta automáticamente tu distribución Linux y configura tu entorno en minutos y agrega integracion con IA local (sin internet) y en la nube (con internet).
 
-**Soporte actual:**
+**Soporte:**
 
 - 🍥 **Debian / Ubuntu / Kali** (apt)
 - 🏔️ **Alpine Linux** (apk)
@@ -33,15 +33,35 @@ python3 main.py
 
 ## 🎮 Modo de Uso
 
-Este proyecto utiliza una *Interfaz de Texto (TUI)* interactiva.
-
 Aparecerá un menú donde podrás seleccionar:
 
 - Actualizar el sistema.
 - Instalar paquetes base y extra.
 - Instalar entorno de desarrollo personalizado.
-- Descargar y configurar modelos de IA local.
-- Instalar y despues configurar la integración con Gemini (Google AI).
+- Descargar tipos/modelos de IA local.
+- Instalar y configurar Gemini 2.5 Flash.
+
+*Después de terminada la instalacion, se puede acceder a cada modelo de IA local con el comando/alias:*
+
+- `qwen: "pregunta"` o `qwen:`
+- `gemma: "pregunta"` o `gemma:`
+- `phi: "pregunta"` o `phi:`
+
+### Modos de uso en la terminal
+
+#### 1. Pregunta rapida
+
+- `qwen: "pregunta"` - Hacer pregunta y recibir respuesta, ***sin contexto***
+- `gemini: "pregunta"` - Hacer pregunta y recibir respuesta, ***sin contexto***
+
+*Nota: no usar el signo **?** al final de la pregunta*
+
+#### 2. Modo interactivo o chat
+
+- `qwen:` - Inicia una sesion/chat con el modelo Qwen 3 0.6B. ***Usa contexto de la sesion.***
+- `gemini:` - Inicia una sesion/chat con el modelo Gemini 2.5 Flash. ***Usa contexto de la sesion.***
+
+*Nota: no usar el signo **?** al final de la pregunta*
 
 ## 📦 Paquetes Incluidos
 
@@ -60,22 +80,17 @@ El sistema contiene los siguientes paquetes:
 | `curl` | Transferencia de datos |
 | `python-dev` | Headers necesarios para compilar herramientas |
 
-## 🤖 Integración AI
+## 🤖 Integración IA
 
-Una vez instalado, tu terminal tendrá acceso a herramientas de IA (requiere Ollama instalado aparte para los modelos locales):
+Una vez instalado, tu terminal tendrá acceso a herramientas de IA (requiere Ollama instalado para los modelos locales):
 
-Existen 4 modelos disponibles:
+Existen 4 tipos de modelos de IA disponibles:
 
-- Qwen3:0.6B : Ligero (523MB-40K tokens)
-- Gemma3:1B : Balanceado (815MB-32K tokens)
-- Phi4-mini:latest : Pesado (2.5GB-128K tokens)
+- Qwen3:0.6B : Ligero **(523MB-40K tokens)**
+- Gemma3:1B : Balanceado **(815MB-32K tokens)**
+- Phi4-mini:latest : Pesado **(2.5GB-128K tokens)**
 - Gemini 2.5 Flash (respaldo en la nube): requiere internet y una API Key de Google.
 La puede conseguir gratis en <https://aistudio.google.com/>
-
-- `qwen "pregunta"`: Consulta al modelo Qwen 3 0.6B.
-- `gemma "pregunta"`: Consulta al modelo Google Gemma 3 1B.
-- `phi "pregunta"`: Consulta al modelo Microsoft Phi-4 Mini.
-- `gemini "pregunta"`: Consulta a la API de Google Gemini 2.5 Flash (requiere internet y una API Key).
 
 ## 🧪 Testing con Docker
 
