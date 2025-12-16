@@ -22,7 +22,7 @@ if not api_key:
 
 if not api_key:
     print("Error: Variable GEMINI_API_KEY no configurada.")
-    print("Edita tu ~/.zshrc y agrega: export GEMINI_API_KEY='tu_clave'")
+    print("Edita el archivo ~/.brainbash_secrets y agrega: export GEMINI_API_KEY='tu_clave'")
     sys.exit(1)
 
 # Leer contexto compartido si existe
@@ -52,12 +52,12 @@ else:
     chat = model.start_chat(history=[])
     # Usamos codigos ANSI directos para colores, o podrias importar tu clase Colors
     print("\033[1;34m--- Chat Gemini (Nube) ---\033[0m")
-    print("Escribe 'exit' o 'quit' para salir.\n")
+    print("Escribe 'exit' o 'salir' para salir.\n")
 
     while True:
         try:
             user_input = input("\033[1;32mTu > \033[0m")
-            if user_input.lower() in ["exit", "quit"]:
+            if user_input.lower() in ["exit", "salir"]:
                 break
             if not user_input.strip():
                 continue

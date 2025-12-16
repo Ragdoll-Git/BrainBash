@@ -20,17 +20,17 @@ if [ -f /etc/debian_version ]; then
     # Debian / Ubuntu
     if ! command -v git &> /dev/null || ! command -v python3 &> /dev/null; then
         $SUDO apt-get update -qq
-        $SUDO apt-get install -y -qq git python3
+        $SUDO apt-get install -y -qq git python3 nano whiptail
     fi
 elif [ -f /etc/alpine-release ]; then
     # Alpine
     if ! command -v git &> /dev/null || ! command -v python3 &> /dev/null; then
-        $SUDO apk add --no-cache git python3
+        $SUDO apk add --no-cache git python3 nano newt
     fi
 elif [ -f /etc/fedora-release ]; then
     # Fedora
     if ! command -v git &> /dev/null || ! command -v python3 &> /dev/null; then
-        $SUDO dnf install -y git python3
+        $SUDO dnf install -y git python3 nano newt
     fi
 fi
 

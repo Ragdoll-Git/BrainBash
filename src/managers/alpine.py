@@ -32,6 +32,12 @@ class AlpineManager(PackageManager):
         
         # 1. APK
         if apk_packages:
+            # Agregamos dependencias de compatibilidad para binarios (Ollama, etc)
+            compat_libs = ["gcompat", "libstdc++", "curl"]
+            for lib in compat_libs:
+                if lib not in apk_packages and lib not in manual_packages:
+                     apk_packages.append(lib)
+
             print(f"[Alpine] Instalando paquetes base: {', '.join(apk_packages)}")
             cmd = self.sudo_cmd + ["apk", "add", "--no-cache"] + apk_packages
             try:

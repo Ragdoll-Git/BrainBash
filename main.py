@@ -6,6 +6,7 @@
 
 import sys
 import os
+import shutil
 import subprocess
 import time
 import textwrap
@@ -139,23 +140,6 @@ def setup_ollama(logger, selected_models):
     """Instala Ollama SOLO si hay modelos seleccionados"""
     if not selected_models: return
 
-    # 1. Instalar Motor si falta
-    if subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode != 0:
-        logger.step("Instalando Motor Ollama (Requerido para IA local)")
-        try:
-            # Intentamos usar el script local si existe
-            local_script = Path(__file__).parent / "src" / "scripts" / "install_ollama.sh"
-            if local_script.exists():
-                print(f"[Ollama] Usando instalador local: {local_script}")
-                subprocess.run(f"sh {local_script}", shell=True, check=True)
-            else:
-                print("[Ollama] Descargando instalador web...")
-                subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
-        except subprocess.CalledProcessError:
-            logger.error("Fallo la instalacion de Ollama. Verifique logs.")
-            return
-    
-    # 1.5. Asegurar servicio corriendo
     def ensure_ollama_running():
         # Check simple
         if subprocess.run("ollama list", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
@@ -164,9 +148,16 @@ def setup_ollama(logger, selected_models):
         logger.info("Iniciando servidor Ollama...")
         # Start in background
         try:
-            # Usamos Popen para no bloquear
-            with open(os.devnull, 'w') as devnull:
-                subprocess.Popen(["ollama", "serve"], stdout=devnull, stderr=devnull)
+            # Asegurar que ~/.local/bin este en el PATH para el subprocess
+            env = os.environ.copy()
+            user_bin = Path.home() / ".local" / "bin"
+            if str(user_bin) not in env["PATH"]:
+                env["PATH"] = f"{user_bin}:{env['PATH']}"
+
+            # Usamos Popen para no bloquear, redirigiendo salida a archivo para debug
+            log_path = Path("ollama.log")
+            with open(log_path, "w") as log_file:
+                 subprocess.Popen(["ollama", "serve"], stdout=log_file, stderr=subprocess.STDOUT, env=env)
         except Exception as e:
             logger.error(f"No se pudo iniciar Ollama: {e}")
             return False
@@ -175,10 +166,84 @@ def setup_ollama(logger, selected_models):
         logger.info("Esperando servicio...")
         for _ in range(20):
             time.sleep(0.5)
-            if subprocess.run("ollama list", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            # Check with env
+            if subprocess.run("ollama list", shell=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
                 logger.success("Servidor Ollama iniciado.")
                 return True
+        
+        # Si falló, mostramos las ultimas lineas del log
+        if log_path.exists():
+            try:
+                with open(log_path, "r") as f:
+                    logger.error(f"Log de Ollama (Ultimas lineas):\n{f.read()[-500:]}")
+            except: pass
+            
         return False
+
+    # 1. Instalar Motor si falta
+    # Verificamos PATH manual
+    user_bin = Path.home() / ".local" / "bin"
+    ollama_bin = user_bin / "ollama"
+    
+    is_installed = False
+    if ollama_bin.exists():
+        is_installed = True
+    elif subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
+         is_installed = True
+
+    if not is_installed:
+        logger.step("Instalando Motor Ollama (Requerido para IA local)")
+        # 1. Intento descarga manual directa (GitHub)
+        installed_manual = False
+        try:
+            logger.info("Intentando descarga directa desde GitHub...")
+            arch = os.uname().machine
+            if arch == "x86_64": arch = "amd64"
+            elif arch in ["aarch64", "arm64"]: arch = "arm64"
+            
+            url = f"https://github.com/ollama/ollama/releases/latest/download/ollama-linux-{arch}.tgz"
+            
+            # Dir temporal
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                tmp_tar = Path(tmpdirname) / "ollama.tgz"
+                subprocess.run(["curl", "-L", "-o", str(tmp_tar), url], check=True)
+                subprocess.run(["tar", "-xzf", str(tmp_tar), "-C", tmpdirname], check=True)
+                
+                # Mover binario
+                binary_src = Path(tmpdirname) / "bin" / "ollama" 
+                # A veces el tar tiene ./bin/ollama o solo ./ollama?
+                # Revisar estructura: ollama-linux-amd64.tgz -> ./bin/ollama
+                
+                if not binary_src.exists():
+                     # Intento raiz
+                     binary_src = Path(tmpdirname) / "ollama"
+                
+                if binary_src.exists():
+                    user_bin.mkdir(parents=True, exist_ok=True)
+                    target = user_bin / "ollama"
+                    shutil.copy2(binary_src, target)
+                    target.chmod(0o755)
+                    logger.success(f"Ollama instalado en {target}")
+                    installed_manual = True
+                else:
+                    logger.warning("No se encontro binario en el tgz.")
+
+        except Exception as e:
+            logger.error(f"Fallo descarga manual: {e}")
+        
+        # 2. Fallback a Script
+        if not installed_manual:
+             logger.info("Usando script de instalacion (Fallback)...")
+             try:
+                local_script = Path(__file__).parent / "src" / "scripts" / "install_ollama.sh"
+                if local_script.exists():
+                    subprocess.run(f"sh {local_script}", shell=True, check=True)
+                else:
+                    subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
+             except subprocess.CalledProcessError:
+                logger.error("Fallo la instalacion de Ollama.")
+                return
 
     if not ensure_ollama_running():
          logger.error("No se pudo conectar a Ollama. Ejecuta 'ollama serve' manualmente.")
@@ -376,12 +441,12 @@ def main():
 
         prefix = "sudo " if os.geteuid() != 0 else ""
         main_menu_opts = [
-            (TXT_UPDATE,  f"{prefix}apt update & upgrade    [{s_update}]"),
-            (TXT_BASE,    f"Git, Python, Zsh, Curl          [{c_base} selecc]"),
-            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide     [{c_extra} selecc]"),
-            (TXT_DOTS,    f"Configuraciones personales      [{s_dots}]"),
-            (TXT_MODELS,  f"Qwen, Gemma, Phi4               [{c_models} selecc]"),
-            (TXT_GEMINI,  f"Gemini 2.5 flash                [{s_gemini}]"),
+            (TXT_UPDATE,  f"{prefix} update & upgrade           [{s_update}]"),
+            (TXT_BASE,    f"Git, Python, Zsh, Curl              [{c_base} selecc]"),
+            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide, Htop   [{c_extra} selecc]"),
+            (TXT_DOTS,    f"Configuraciones personales          [{s_dots}]"),
+            (TXT_MODELS,  f"Qwen, Gemma, Phi4                   [{c_models} selecc]"),
+            (TXT_GEMINI,  f"Gemini 2.5 flash                    [{s_gemini}]"),
             (TXT_INSTALL, f">> INICIAR INSTALACION (ENTER)<<")
         ]
 
