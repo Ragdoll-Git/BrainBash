@@ -17,36 +17,48 @@ class AlpineManager(PackageManager):
         apk_packages = []
         manual_packages = []
         
-        # Lista de herramientas que preferimos instalar manualmente (o no estan en repos base)
-        # Nota: Alpine v3.23 (latest) tiene muchos, pero mejor asegurar versiones recientes
-        # y evitar problemas de nombres (tealdeer vs tldr).
-        modern_tools = ["eza", "bat", "fzf", "starship", "zoxide", "tldr"]
-
+        # En Alpine, muchas "modern tools" SI estan en los repos (community/edge).
+        # Es preferible usarlas nativas que bajar binarios glibc que segfaultean (como Ollama).
+        # Mapeo manual de nombres si difieren
+        
         for pkg in packages:
             mapped = self._get_mapped_name(pkg)
             
-            if mapped in modern_tools or pkg in modern_tools:
-                manual_packages.append(mapped)
+            # tldr no parece estar en alpine standard ("tealdeer" tampoco en search)
+            # asi que lo mandamos a manual. El resto (eza, bat, etc) suele estar.
+            if pkg == "tldr" or mapped == "tldr":
+                manual_packages.append("tldr")
             else:
                 apk_packages.append(mapped)
+
+        # Force install 'ollama' via APK if we are in this manager
+        # Esto evita que main.py intente bajar el binario de GitHub que da Segfault
+        if "ollama" not in apk_packages:
+            apk_packages.append("ollama")
+
+        # Asegurar 'docs' para man pages si se quiere? (opcional)
+        # alpine suele separar docs.
         
         # 1. APK
         if apk_packages:
-            # Agregamos dependencias de compatibilidad para binarios (Ollama, etc)
-            compat_libs = ["gcompat", "libstdc++", "curl"]
-            for lib in compat_libs:
-                if lib not in apk_packages and lib not in manual_packages:
-                     apk_packages.append(lib)
+            print(f"[Alpine] Instalando paquetes nativos: {', '.join(apk_packages)}")
+            # gcompat puede ser util para tldr manual, pero los nativos no lo necesitan.
+            # Agregamos gcompat solo si vamos a instalar manuales binarios glibc
+            if manual_packages:
+                if "gcompat" not in apk_packages: apk_packages.append("gcompat")
+                if "libstdc++" not in apk_packages: apk_packages.append("libstdc++")
+                if "curl" not in apk_packages: apk_packages.append("curl")
 
-            print(f"[Alpine] Instalando paquetes base: {', '.join(apk_packages)}")
             cmd = self.sudo_cmd + ["apk", "add", "--no-cache"] + apk_packages
             try:
                 subprocess.run(cmd, check=True)
             except subprocess.CalledProcessError:
                 print("[Error] Fallo la instalacion con APK.")
+                # No hacemos raise inmediato para intentar los manuales? 
+                # Mejor fallar si lo basico falla.
                 raise
 
-        # 2. Binarios Manuales
-        # Para Alpine es CRITICO usar allow_musl=True porque usa musl libc
+        # 2. Binarios Manuales (Solo tldr)
         for tool in manual_packages:
+            # allow_musl=True intentará buscar assets compatibles, o usara gcompat
             self._install_binary(tool, allow_musl=True)

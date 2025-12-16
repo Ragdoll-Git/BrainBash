@@ -77,7 +77,8 @@ Ante cualquier duda: **PREGUNTAR**.
 - [ ] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.
 - [ ] Probar instalación en un entorno "limpio" real (no Docker) para validar paths absolutos si los hubiera.
 - [ ] Invertir el paso de instalacion de Ollama, si no se puede descargar desde GitHub, se debe instalar desde ollama_install.sh
-- [ ] agregar paquetes nano, python3 y whiptail a los contenedores docker de debian, alpine y fedora. Para poder usarlos en el script de instalacion.
+- [ ] Agregar paquetes nano, python3 y whiptail a los contenedores docker de debian, alpine y fedora. Para poder usarlos en el script de instalacion.
+- [ ] Ajustar temperatura de Gemma (es muy creativa y se desvía del contexto).
 
 ## 6. FAQ / Preguntas para el Usuario
 

@@ -13,15 +13,35 @@ class FedoraManager(PackageManager):
         subprocess.run(self.sudo_cmd + ["dnf", "makecache"], check=True)
 
     def install(self, packages: List[str]):
-        mapped_packages = [self._get_mapped_name(p) for p in packages]
+        dnf_packages = []
+        manual_packages = []
         
-        print(f"[Fedora] Instalando: {', '.join(mapped_packages)}")
+        # Herramientas que no estan en repos base de Fedora (o tienen nombres raros)
+        # y preferimos bajar binarios recientes de GitHub
+        modern_tools = ["eza", "bat", "fzf", "starship", "zoxide", "tldr"]
+
+        for pkg in packages:
+            mapped = self._get_mapped_name(pkg)
+            
+            if mapped in modern_tools or pkg in modern_tools:
+                manual_packages.append(mapped)
+            else:
+                dnf_packages.append(mapped)
         
-        try:
-            subprocess.run(
-                self.sudo_cmd + ["dnf", "install", "-y"] + mapped_packages, 
-                check=True
-            )
-        except subprocess.CalledProcessError:
-            print("[Error] Fallo la instalacion con DNF.")
-            raise
+        # 1. DNF
+        if dnf_packages:
+            print(f"[Fedora] Instalando paquetes DNF: {', '.join(dnf_packages)}")
+            try:
+                # --skip-broken podria ayudar pero mejor ser explicitos
+                subprocess.run(
+                    self.sudo_cmd + ["dnf", "install", "-y"] + dnf_packages, 
+                    check=True
+                )
+            except subprocess.CalledProcessError:
+                print("[Error] Fallo la instalacion con DNF.")
+                raise
+
+        # 2. Binarios Manuales
+        for tool in manual_packages:
+            # Fedora usa glibc, asi que allow_musl=False (default) esta bien
+            self._install_binary(tool)
