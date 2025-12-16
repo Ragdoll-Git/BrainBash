@@ -12,10 +12,8 @@
   - [x] Instalación resiliente (retry/catch en descargas).
   - [x] Configuración interactiva de API Keys.
 - **Limitaciones del Agente:**
-  - [x] Los modelos de IA local no deben modificarse -> Respetado.
-  - [x] Acceso restringido a `.ai/` -> Respetado.
-  - [NEW] El archivo `config/zshrc` es sagrado y no debe contener secretos. Usar `~/.brainbash_secrets`.
-
+  - [ ] Los modelos de IA local no deben modificarse, son esos modelos, y la verificacion de que existen se encuentra documentado en la seccion *Documentacion*
+  - [ ] Acceso restringido a `.ai/` (requiere bypass via comandos).
 - **Objetivos Secundarios:**
   - [x] Mantener limpieza.
 
@@ -24,7 +22,39 @@
 Link a repositorio de github del proyecto:
 <https://github.com/Ragdoll-Git/BrainBash>
 
-## 3. Estado del Proyecto
+Link a modelos de IA:
+
+<https://ollama.com/library/qwen3:0.6b>
+<https://ollama.com/library/gemma3:1b>
+<https://ollama.com/library/phi4-mini:latest>
+
+## 3. Reglas de Comportamiento del Agente
+
+**INSTRUCCIÓN INVIOLABLE:**
+Ante cualquier duda: **PREGUNTAR**.
+
+- **No asumir NADA** ni inventar información que no haya sido dada explícitamente.
+- Hacer preguntas de seguimiento después de la respuesta del usuario o en cualquier momento que sea necesario.
+- **Principio Rector:** Es mejor mantener informado al usuario de las decisiones que se vayan a tomar antes de actuar, que asumir y equivocarse.
+
+## 3. Registro de Estado del Proyecto
+
+*Log de cambios recientes y estado actual.*
+
+- **Fecha: 2025-12-16 (Sesión Anterior)**
+  - **Cambios:**
+    - Implementación de `config/context.md` y sistema de plantillas `Modelfile`.
+    - Fix crítico para uso de `sudo` en Docker (detección dinámica de root).
+    - Implementación de `_simple_checklist` para TUI fallback (sin whiptail).
+    - Corrección de tags de modelos Ollama a versiones válidas (`qwen3`, `gemma3`, `phi4-mini`).
+    - Agregado `htop` a paquetes extra (instalación vía apt).
+    - Prompt interactivo para Gemini API Key y corrección de alias zsh.
+    - Auto-arranque de servidor `ollama serve` si está detenido.
+  - **Estado funcional:** Estable. Instalador probado en Docker y validado por usuario.
+
+- **Fecha: 2025-12-16 (Inicial)**
+  - Cambios: Creación inicial del archivo AI_JOURNAL.md.
+  - Estado funcional: Inicialización.
 
 - **Fecha: 2025-12-16 (Sesión Actual - Fin)**
   - **Estado**: Funcional y Robusto.
@@ -42,11 +72,13 @@ Link a repositorio de github del proyecto:
 - **[Decisión]:** Separar secretos en `.brainbash_secrets` (sourced por zshrc) para evitar contaminar el historial de git con API Keys personales.
 - **[Decisión]:** Actualizar `pip` dentro del venv de Gemini para silenciar warnings molestos.
 
-## 5. Próximos Pasos
+## 5. Próximos Pasos y tareas pendientes
 
 - [ ] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.
 - [ ] Probar instalación en un entorno "limpio" real (no Docker) para validar paths absolutos si los hubiera.
 
 ## 6. FAQ / Preguntas para el Usuario
+
+*Espacio para que el agente deje preguntas pendientes si la sesión termina y hay dudas no resueltas. Sea especifico y detallado con las preguntas.*
 
 (Sin preguntas pendientes)
