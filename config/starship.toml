@@ -1,5 +1,8 @@
 # config/starship.toml (Minimo)
 
+# Timeout para evitar warnings en directorios grandes (ms)
+scan_timeout = 60
+
 format = """
 $os$directory$git_branch$git_status$python$line_break$character
 """

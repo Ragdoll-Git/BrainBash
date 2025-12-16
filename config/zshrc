@@ -99,6 +99,3 @@ gemini:() {
         "$SCRIPT_PATH"
     fi
 }
-
-# Gemini AI
-export GEMINI_API_KEY=''

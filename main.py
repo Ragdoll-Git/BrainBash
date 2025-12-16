@@ -114,7 +114,6 @@ def setup_ollama(logger, selected_models):
     if subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode != 0:
         logger.step("Instalando Motor Ollama (Requerido para IA local)")
         try:
-        try:
             # Intentamos usar el script local si existe
             local_script = Path(__file__).parent / "src" / "scripts" / "install_ollama.sh"
             if local_script.exists():
@@ -162,7 +161,8 @@ def setup_ollama(logger, selected_models):
     if context_path.exists():
         try:
             with open(context_path, "r") as f:
-                system_prompt = f.read().strip()
+                # Escapamos comillas triples para no romper el Modelfile
+                system_prompt = f.read().strip().replace('"""', '\\"\\"\\"')
                 logger.info("Contexto compartido cargado.")
         except Exception as e:
             logger.error(f"Error leyendo contexto: {e}")
@@ -295,6 +295,8 @@ def setup_gemini(logger, tui):
     python_bin = venv_path / "bin" / "python3"
     
     try:
+        # Actualizar pip primero para evitar warnings
+        subprocess.run([str(pip_bin), "install", "-q", "--upgrade", "pip"], check=True)
         subprocess.run([str(pip_bin), "install", "-q", "google-generativeai"], check=True)
     except:
         logger.error("Fallo pip install.")
@@ -451,7 +453,7 @@ def main():
         setup_gemini(logger, tui)
 
     logger.step("FINALIZADO")
-    logger.info("Reinicia tu terminal para ver los cambios. Puede hacerlo con 'exit', y despues 'zsh'.")
+    logger.info("Reinicia tu terminal para ver los cambios. O usa 'zsh' para iniciar.")
 
 if __name__ == "__main__":
     try: main()

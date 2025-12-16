@@ -1,8 +1,3 @@
-# Modelfile Template for BrainBash AI
-# Variables to be replaced:
-# ${BASE_MODEL} -> The base model (e.g., qwen3:0.6b)
-# ${SYSTEM_PROMPT} -> The content of context.md
-
 FROM ${BASE_MODEL}
 
 SYSTEM """
