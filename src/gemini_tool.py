@@ -8,12 +8,11 @@ api_key = os.getenv("GEMINI_API_KEY")
 # Fallback: Intentar leer .zshrc si no esta en env (ej: usuario no reinicio shell)
 if not api_key:
     try:
-        zshrc_path = os.path.expanduser("~/.zshrc")
-        if os.path.exists(zshrc_path):
-            with open(zshrc_path, "r") as f:
+        secrets_path = os.path.expanduser("~/.brainbash_secrets")
+        if os.path.exists(secrets_path):
+            with open(secrets_path, "r") as f:
                 for line in f:
                     if "export GEMINI_API_KEY=" in line:
-                         # Extraer valor entre comillas simples o dobles
                          parts = line.split("=", 1)
                          if len(parts) > 1:
                              api_key = parts[1].strip().strip("'").strip('"')

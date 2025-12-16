@@ -99,3 +99,8 @@ gemini:() {
         "$SCRIPT_PATH"
     fi
 }
+
+# Cargar secretos (API Keys) si existen
+if [ -f "$HOME/.brainbash_secrets" ]; then
+    source "$HOME/.brainbash_secrets"
+fi

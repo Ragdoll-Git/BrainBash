@@ -246,19 +246,12 @@ def setup_gemini(logger, tui):
     api_key = input("API Key > ").strip()
     
     if api_key:
-        zshrc = Path.home() / ".zshrc"
+        secrets_path = Path.home() / ".brainbash_secrets"
         try:
-            # Verificar si ya existe
-            content = ""
-            if zshrc.exists():
-                with open(zshrc, "r") as f: content = f.read()
-            
-            if "GEMINI_API_KEY" not in content:
-                with open(zshrc, "a") as f:
-                    f.write(f"\n# Gemini AI\nexport GEMINI_API_KEY='{api_key}'\n")
-                logger.success("API Key agregada a .zshrc")
-            else:
-                logger.info("Parece que ya tienes una API Key en .zshrc, no se sobreescribio.")
+            # Escribir en archivo de secretos (siempre override o append, aqui simplificamos create)
+            with open(secrets_path, "w") as f:
+                f.write(f"export GEMINI_API_KEY='{api_key}'\n")
+            logger.success("API Key guardada en ~/.brainbash_secrets")
         except Exception as e:
             logger.error(f"Error guardando API Key: {e}")
     else:
