@@ -57,27 +57,28 @@ Ante cualquier duda: **PREGUNTAR**.
   - Estado funcional: Inicialización.
 
 - **Fecha: 2025-12-16 (Sesión Actual - Fin)**
-  - **Estado**: Funcional y Robusto.
+  - **Estado**: Funcional y Multi-Distro (Debian, Alpine, Fedora).
   - **Cambios Principales**:
-    - **Persistencia Docker**: Volumen `ollama_data` agregado.
-    - **Estabilidad Ollama**: Script de instalación local (`src/scripts/install_ollama.sh`) descargando de GitHub Releases.
-    - **Aislamiento de Secretos**: API Keys movidas a `~/.brainbash_secrets`.
-    - **UX**: Fix warnings de Pip y Starship timeout.
-    - **Fixes**: Corrección de sintaxis en Modelfile y main.py.
+    - **Soporte Alpine**: `sudo` dinámico, paquetes nativos APK para `ollama`, `eza`, `bat` (evitando segfaults de musl).
+    - **Soporte Fedora**: Instalación manual (GitHub) para herramientas faltantes en repos (`eza`, `starship`, etc.).
+    - **Workflow Desarrollo**: `install.sh` ahora detecta entorno local ("Dev Mode") y evita clonar.
+    - **Dependencias**: Agregados `nano`, `whiptail`/`newt` al bootstrap.
+    - **Ollama**: Lógica inversa (Manual > Script) y compatibilidad Alpine (`gcompat`).
 
 ## 4. Decisiones Técnicas
 
 - **[Decisión]:** Empaquetar `install_ollama.sh` localmente para evitar errores 404/timeout de `ollama.com`.
-- **[Decisión]:** Usar `GitHub Releases` como fuente de binarios de Ollama por mayor estabilidad.
 - **[Decisión]:** Separar secretos en `.brainbash_secrets` (sourced por zshrc) para evitar contaminar el historial de git con API Keys personales.
-- **[Decisión]:** Actualizar `pip` dentro del venv de Gemini para silenciar warnings molestos.
+- **[Decisión]:** **Alpine**: Usar paquetes nativos APK para `ollama` y herramientas modernas siempre que sea posible para evitar problemas de ABI (glibc vs musl). Solo usar manual para lo que no existe (`tldr`).
+- **[Decisión]:** **Fedora**: Usar instalación manual (GitHub releases) para herramientas modernas que no están en los repositorios base, evitando fallos de `dnf`.
+- **[Decisión]:** **Install Script**: Detectar la presencia de `main.py` para asumir "Modo Desarrollo" y usar los archivos locales en lugar de un `git clone` fresco.
 
 ## 5. Próximos Pasos y tareas pendientes
 
-- [ ] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.
+- [x] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.
 - [ ] Probar instalación en un entorno "limpio" real (no Docker) para validar paths absolutos si los hubiera.
-- [ ] Invertir el paso de instalacion de Ollama, si no se puede descargar desde GitHub, se debe instalar desde ollama_install.sh
-- [ ] Agregar paquetes nano, python3 y whiptail a los contenedores docker de debian, alpine y fedora. Para poder usarlos en el script de instalacion.
+- [x] Invertir el paso de instalacion de Ollama, si no se puede descargar desde GitHub, se debe instalar desde ollama_install.sh
+- [x] Agregar paquetes nano, python3 y whiptail a los contenedores docker de debian, alpine y fedora. Para poder usarlos en el script de instalacion.
 - [ ] Ajustar temperatura de Gemma (es muy creativa y se desvía del contexto).
 
 ## 6. FAQ / Preguntas para el Usuario

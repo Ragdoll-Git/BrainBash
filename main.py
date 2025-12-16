@@ -347,9 +347,9 @@ def setup_gemini(logger, tui):
                 f.write(f"export GEMINI_API_KEY='{api_key}'\n")
             logger.success("API Key guardada en ~/.brainbash_secrets")
         except Exception as e:
-            logger.error(f"Error guardando API Key: {e}")
+            print(f"[Error] No se pudo guardar la Key: {e}")
     else:
-        logger.info("Saltando configuración de Key. Recuerda agregarla manualmente luego en ~/.zshrc.")
+        print("[INFO] Saltando configuración de Key. Recuerda agregarla manualmente luego en ~/.brainbash_secrets")
     
     # 1. Definir rutas
     # Ubicacion del codigo fuente en tu proyecto
