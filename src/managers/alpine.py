@@ -10,20 +10,37 @@ class AlpineManager(PackageManager):
 
     def update(self):
         print("[Alpine] Actualizando indices de repositorios...")
-        subprocess.run(["sudo", "apk", "update"], check=True)
+        # Usamos self.sudo_cmd que detecta si somos root o no
+        subprocess.run(self.sudo_cmd + ["apk", "update"], check=True)
 
     def install(self, packages: List[str]):
-        # Traducir nombres usando el diccionario Rosetta del core
-        mapped_packages = [self._get_mapped_name(p) for p in packages]
+        apk_packages = []
+        manual_packages = []
         
-        print(f"[Alpine] Instalando paquetes: {', '.join(mapped_packages)}")
+        # Lista de herramientas que preferimos instalar manualmente (o no estan en repos base)
+        # Nota: Alpine v3.23 (latest) tiene muchos, pero mejor asegurar versiones recientes
+        # y evitar problemas de nombres (tealdeer vs tldr).
+        modern_tools = ["eza", "bat", "fzf", "starship", "zoxide", "tldr"]
+
+        for pkg in packages:
+            mapped = self._get_mapped_name(pkg)
+            
+            if mapped in modern_tools or pkg in modern_tools:
+                manual_packages.append(mapped)
+            else:
+                apk_packages.append(mapped)
         
-        # En Alpine usamos --no-cache para no guardar los indices en disco
-        # y mantener el sistema lo mas ligero posible.
-        cmd = ["sudo", "apk", "add", "--no-cache"] + mapped_packages
-        
-        try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError:
-            print("[Error] Fallo la instalacion con APK.")
-            raise
+        # 1. APK
+        if apk_packages:
+            print(f"[Alpine] Instalando paquetes base: {', '.join(apk_packages)}")
+            cmd = self.sudo_cmd + ["apk", "add", "--no-cache"] + apk_packages
+            try:
+                subprocess.run(cmd, check=True)
+            except subprocess.CalledProcessError:
+                print("[Error] Fallo la instalacion con APK.")
+                raise
+
+        # 2. Binarios Manuales
+        # Para Alpine es CRITICO usar allow_musl=True porque usa musl libc
+        for tool in manual_packages:
+            self._install_binary(tool, allow_musl=True)

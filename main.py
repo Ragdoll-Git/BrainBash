@@ -90,12 +90,41 @@ DOTFILES_MAP = {
 # ==========================================
 
 def get_manager():
+    """
+    Detecta el gestor de paquetes basado en /etc/os-release (ID y ID_LIKE).
+    Retorna la instancia del Manager correspondiente o sale con error.
+    """
     try:
-        with open("/etc/os-release") as f: data = f.read().lower()
-        if "alpine" in data: return AlpineManager("alpine")
-        if "fedora" in data: return FedoraManager("fedora")
-        if "debian" in data or "ubuntu" in data: return DebianManager("debian")
-    except: pass
+        os_info = {}
+        if os.path.exists("/etc/os-release"):
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if "=" in line:
+                        k, v = line.strip().split("=", 1)
+                        # Eliminar comillas si existen
+                        os_info[k] = v.strip('"').strip("'")
+        
+        distro_id = os_info.get("ID", "").lower()
+        distro_like = os_info.get("ID_LIKE", "").lower()
+        
+        # 1. Alpine
+        if distro_id == "alpine":
+            return AlpineManager("alpine")
+            
+        # 2. Fedora / RedHat family
+        if distro_id in ["fedora", "rhel", "centos", "almalinux", "rocky"] or "fedora" in distro_like:
+            return FedoraManager("fedora")
+            
+        # 3. Debian / Ubuntu family
+        if distro_id in ["debian", "ubuntu", "linuxmint", "pop", "kali"] or "debian" in distro_like or "ubuntu" in distro_like:
+            return DebianManager("debian")
+            
+    except Exception as e:
+        print(f"[Error] Fallo la deteccion de OS: {e}")
+
+    # Fallback o error total
+    print("[Error] Sistema operativo no soportado o no detectado.")
+    print("Sistemas soportados: Debian/Ubuntu, Fedora/RHEL, Alpine.")
     sys.exit(1)
 
 def install_omz(logger):

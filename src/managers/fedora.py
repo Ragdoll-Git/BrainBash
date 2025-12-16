@@ -10,7 +10,7 @@ class FedoraManager(PackageManager):
     def update(self):
         print("[Fedora] Actualizando metadatos de DNF...")
         # makecache solo actualiza la lista de paquetes, similar a apt update
-        subprocess.run(["sudo", "dnf", "makecache"], check=True)
+        subprocess.run(self.sudo_cmd + ["dnf", "makecache"], check=True)
 
     def install(self, packages: List[str]):
         mapped_packages = [self._get_mapped_name(p) for p in packages]
@@ -19,7 +19,7 @@ class FedoraManager(PackageManager):
         
         try:
             subprocess.run(
-                ["sudo", "dnf", "install", "-y"] + mapped_packages, 
+                self.sudo_cmd + ["dnf", "install", "-y"] + mapped_packages, 
                 check=True
             )
         except subprocess.CalledProcessError:

@@ -1,9 +1,6 @@
 import subprocess
 import os
 import shutil
-import json
-import urllib.request
-import platform
 from pathlib import Path
 from typing import List
 from ..core import PackageManager
