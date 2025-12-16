@@ -16,6 +16,9 @@ class DebianManager(PackageManager):
             subprocess.run(self.sudo_cmd + ["apt", "update"], check=True)
             subprocess.run(self.sudo_cmd + ["apt", "upgrade", "-y"], check=True)
             subprocess.run(self.sudo_cmd + ["apt", "autoremove", "-y"], check=True)
+            # Actualizamos pip aqui para evitar warnings al final
+            print("[Debian] Actualizando pip...")
+            subprocess.run(self.sudo_cmd + ["python3", "-m", "pip", "install", "--upgrade", "pip", "--break-system-packages"], check=False)
         except subprocess.CalledProcessError:
             print("[Error] Falló la actualización. Continuando bajo su propio riesgo...")
 

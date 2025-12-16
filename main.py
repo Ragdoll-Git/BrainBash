@@ -114,9 +114,17 @@ def setup_ollama(logger, selected_models):
     if subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode != 0:
         logger.step("Instalando Motor Ollama (Requerido para IA local)")
         try:
-            subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
+        try:
+            # Intentamos usar el script local si existe
+            local_script = Path(__file__).parent / "src" / "scripts" / "install_ollama.sh"
+            if local_script.exists():
+                print(f"[Ollama] Usando instalador local: {local_script}")
+                subprocess.run(f"sh {local_script}", shell=True, check=True)
+            else:
+                print("[Ollama] Descargando instalador web...")
+                subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
         except subprocess.CalledProcessError:
-            logger.error("Fallo la instalacion de Ollama (Error de red?). Verifique su conexion.")
+            logger.error("Fallo la instalacion de Ollama. Verifique logs.")
             return
     
     # 1.5. Asegurar servicio corriendo
