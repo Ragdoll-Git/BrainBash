@@ -2,43 +2,37 @@
 
 ## Log de cambios recientes y estado actual
 
-- **Fecha: 2025-12-16 (Sesión Actual - Fin)**
-  - **Estado**: Funcional y Multi-Distro (Debian, Alpine, Fedora).
+- **Fecha: 2025-12-17 (Sesión Actual - Fin)**
+  - **Estado**: Funcional con detalles pendientes (Zsh auto-start). Instalador robusto y validado en Docker.
   - **Cambios Principales**:
-    - **Soporte Alpine**: `sudo` dinámico, paquetes nativos APK para `ollama`, `eza`, `bat` (evitando segfaults de musl).
-    - **Soporte Fedora**: Instalación manual (GitHub) para herramientas faltantes en repos (`eza`, `starship`, etc.).
-    - **Workflow Desarrollo**: `install.sh` ahora detecta entorno local ("Dev Mode") y evita clonar.
-    - **Dependencias**: Agregados `nano`, `whiptail`/`newt` al bootstrap.
-    - **Ollama**: Lógica inversa (Manual > Script) y compatibilidad Alpine (`gcompat`).
+    - **Docker Optimization**: Agregados `nano`, `whiptail`, `python3` a contenedores Debian/Alpine/Fedora.
+    - **Gemma Config**: Ajustada temperatura a 0.4 para reducir alucinaciones.
+    - **Fedora Fix**: Solucionado `ollama: command not found` agregando `~/.local/bin` al PATH incondicionalmente.
+    - **Gemini Migration**: Migrado de `google.generativeai` a `google.genai` SDK (v2.5).
+    - **Ollama Install**: Optimizada prioridad (Curl Oficial > Binarios > Script Local) con validación de "falso positivo" (check post-curl).
+    - **Logger Fix**: Agregado método `warning` faltante en `src/utils.py`.
+    - **zsh Default**: Implementado `set_default_shell` con `chsh` y fallback `usermod`, aunque requiere revisión en próxima sesión para auto-start.
 
 - **Fecha: 2025-12-16 (Sesión Anterior)**
-  - **Cambios:**
-    - Implementación de `config/context.md` y sistema de plantillas `Modelfile`.
-    - Fix crítico para uso de `sudo` en Docker (detección dinámica de root).
-    - Implementación de `_simple_checklist` para TUI fallback (sin whiptail).
-    - Corrección de tags de modelos Ollama a versiones válidas (`qwen3`, `gemma3`, `phi4-mini`).
-    - Agregado `htop` a paquetes extra (instalación vía apt).
-    - Prompt interactivo para Gemini API Key y corrección de alias zsh.
-    - Auto-arranque de servidor `ollama serve` si está detenido.
-  - **Estado funcional:** Estable. Instalador probado en Docker y validado por usuario.
+  - **Estado**: Funcional y Multi-Distro (Debian, Alpine, Fedora).
+  - **Cambios Principales**:
+    - Soporte Alpine/Fedora.
+    - Lógica inversa Ollama (Manual > Script).
+    - Fix sudo y tui.
 
 - **Fecha: 2025-12-16 (Inicial)**
   - Cambios: Creación inicial del archivo AI_JOURNAL.md.
-  - Estado funcional: Inicialización.
 
 ## Log de decisiones
 
+- **[Decision]:** **Gemini SDK**: Migrar a `google.genai` para evitar warnings de deprecación y usar la API v2.5.
+- **[Decision]:** **Ollama Install**: Priorizar `curl | sh` oficial por velocidad, pero mantener binarios y script local como fallbacks robustos. Verificar siempre la existencia del binario tras el pipe.
+- **[Decision]:** **Zsh Default**: Usar `chsh -s` primariamente, pero incluir fallback a `usermod` (sudo) y verificación contra `/etc/passwd` para robustez.
 - **[Decision]:** Empaquetar `install_ollama.sh` localmente para evitar errores 404/timeout de `ollama.com`.
-- **[Decision]:** Separar secretos en `.brainbash_secrets` (sourced por zshrc) para evitar contaminar el historial de git con API Keys personales.
-- **[Decision]:** **Alpine**: Usar paquetes nativos APK para `ollama` y herramientas modernas siempre que sea posible para evitar problemas de ABI (glibc vs musl). Solo usar manual para lo que no existe (`tldr`).
-- **[Decision]:** **Fedora**: Usar instalación manual (GitHub releases) para herramientas modernas que no están en los repositorios base, evitando fallos de `dnf`.
-- **[Decision]:** **Install Script**: Detectar la presencia de `main.py` para asumir "Modo Desarrollo" y usar los archivos locales en lugar de un `git clone` fresco.
+- **[Decision]:** Separar secretos en `.brainbash_secrets` (sourced por zshrc).
 
 ## Log de tareas pendientes
 
-- [x] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.
-- [ ] Probar instalación en un entorno "limpio" real (no Docker) para validar paths absolutos si los hubiera.
-- [x] Invertir el paso de instalacion de Ollama, si no se puede descargar desde GitHub, se debe instalar desde ollama_install.sh
-- [ ] Agregar e instalar paquetes nano, python3, whiptail a los contenedores docker de debian, alpine y fedora. Para poder usarlos en el script de instalacion y no tener que estar instalandolos cada vez que se quiera reconstruir un contenedor.
-- [ ] Ajustar temperatura de Gemma (es muy creativa y se desvía del contexto).
-- [ ] Se debe agregar un archivo de configuracion para que el usuario pueda modificar las variables de entorno, como la API Key de Gemini, la direccion del servidor de Ollama, etc.
+- [ ] **Prioridad**: Lograr que Zsh inicie automáticamente tras la instalación y en reinicios (Reportado como fallando o inconsistente por usuario).
+- [ ] Validar instalación en entorno limpio real ("Clean Real Environment") para confirmar paths absolutos fuera de Docker.
+- [ ] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.

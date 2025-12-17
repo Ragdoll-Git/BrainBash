@@ -1,5 +1,7 @@
 FROM ${BASE_MODEL}
 
+${PARAMETERS}
+
 SYSTEM """
 ${SYSTEM_PROMPT}
 """

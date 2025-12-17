@@ -116,6 +116,7 @@ class Logger:
 
     def info(self, msg): print(f"{self.theme_color}[INFO]{Colors.RESET} {msg}")
     def success(self, msg): print(f"{Colors.GREEN}[OK]{Colors.RESET} {msg}")
+    def warning(self, msg): print(f"{Colors.YELLOW}[AVISO]{Colors.RESET} {msg}")
     def error(self, msg): print(f"{Colors.RED}[ERROR]{Colors.RESET} {msg}")
     def step(self, msg): print(f"\n{Colors.BOLD}{self.theme_color}=== {msg} ==={Colors.RESET}")
 

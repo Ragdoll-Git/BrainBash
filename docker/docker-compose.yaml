@@ -2,7 +2,25 @@ services:
   brainbash-dev:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.debian
+    volumes:
+      - ..:/app
+      - ollama_data:/root/.ollama
+    command: tail -f /dev/null
+
+  brainbash-alpine:
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    volumes:
+      - ..:/app
+      - ollama_data:/root/.ollama
+    command: tail -f /dev/null
+
+  brainbash-fedora:
+    build:
+      context: .
+      dockerfile: Dockerfile.fedora
     volumes:
       - ..:/app
       - ollama_data:/root/.ollama

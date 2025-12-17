@@ -1,6 +1,6 @@
 import sys
 import os
-import google.generativeai as genai # type: ignore
+from google import genai
 
 # Tu zshrc debe exportar esta variable
 api_key = os.getenv("GEMINI_API_KEY")
@@ -35,22 +35,40 @@ if os.path.exists(context_path):
     except:
         pass
 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=system_instruction)
+# Configuracion del Cliente (Nuevo SDK)
+client = genai.Client(api_key=api_key)
+MODEL_ID = "gemini-2.5-flash"
 
 # MODO 1: Comando directo (gemini: "pregunta")
 if len(sys.argv) > 1:
     prompt = " ".join(sys.argv[1:])
     try:
-        response = model.generate_content(prompt)
+        # Generate content (configuramos system_instruction aqui si es necesario, 
+        # en el nuevo SDK suele ir en el config o en la llamada)
+        config = None
+        if system_instruction:
+            from google.genai import types
+            config = types.GenerateContentConfig(system_instruction=system_instruction)
+
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+            config=config
+        )
         print(response.text)
     except Exception as e:
         print(f"Error de API: {e}")
 
 # MODO 2: Chat Interactivo (gemini:)
 else:
-    chat = model.start_chat(history=[])
-    # Usamos codigos ANSI directos para colores, o podrias importar tu clase Colors
+    # Configurar chat config
+    chat_config = None
+    if system_instruction:
+        from google.genai import types
+        chat_config = types.GenerateContentConfig(system_instruction=system_instruction)
+
+    chat = client.chats.create(model=MODEL_ID, config=chat_config)
+    
     print("\033[1;34m--- Chat Gemini (Nube) ---\033[0m")
     print("Escribe 'exit' o 'salir' para salir.\n")
 
@@ -63,10 +81,11 @@ else:
                 continue
             
             # Efecto de streaming
-            response = chat.send_message(user_input, stream=True)
             print("\033[1;34mGemini > \033[0m", end="", flush=True)
-            for chunk in response:
-                print(chunk.text, end="", flush=True)
+            
+            for chunk in chat.send_message_stream(user_input):
+                 if chunk.text:
+                    print(chunk.text, end="", flush=True)
             print("\n")
             
         except KeyboardInterrupt:

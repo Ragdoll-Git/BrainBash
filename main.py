@@ -79,6 +79,13 @@ MENU_MODELS = [
     ("phi", "Phi-4 Mini (3.84 B) - Pesado (2.5GB-128K)", "OFF")
 ]
 
+# Configuración especifica de modelos (Parametros)
+MODEL_PARAMS = {
+    "gemma": "PARAMETER temperature 0.4",
+    "qwen": "",
+    "phi": ""
+}
+
 DOTFILES_MAP = {
     "zshrc": ".zshrc",
     "kitty.conf": ".config/kitty/kitty.conf",
@@ -136,6 +143,50 @@ def install_omz(logger):
     subprocess.run('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended', 
                    shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+def set_default_shell(logger):
+    """Configura Zsh como shell por defecto y notifica como revertir."""
+    try:
+        # 1. Detectar path de zsh
+        result = subprocess.run("command -v zsh", shell=True, capture_output=True, text=True)
+        zsh_path = result.stdout.strip()
+        
+        if not zsh_path:
+            logger.warning("No se encontro zsh para setear default.")
+            return
+
+        # 2. Verificar shell actual en /etc/passwd (Mas fiable que env SHELL)
+        import pwd
+        user_record = pwd.getpwuid(os.getuid())
+        current_default_shell = user_record.pw_shell
+        
+        logger.info(f"Shell actual: {current_default_shell} | Zsh Path: {zsh_path}")
+
+        if zsh_path == current_default_shell:
+             logger.info("[Skip] Zsh ya es tu shell por defecto en /etc/passwd.")
+             return
+
+        logger.info(f"Cambiando shell por defecto a {zsh_path}...")
+        
+        # 3. Intentar cambio
+        try:
+             subprocess.run(["chsh", "-s", zsh_path], check=True)
+             logger.success(f"Shell por defecto cambiado a Zsh. (Reinicia sesión para aplicar)")
+        except subprocess.CalledProcessError:
+             # Fallback: usermod (requiere sudo/root, pero este script suele correr asi o el usuario tiene sudo)
+             # Pero usermod necesita el nombre de usuario
+             user_name = user_record.pw_name
+             logger.info(f"chsh falló, intentando usermod para {user_name}...")
+             subprocess.run(["sudo", "usermod", "--shell", zsh_path, user_name], check=True)
+             logger.success(f"Shell cambiado con usermod.")
+
+    except Exception as e:
+        logger.warning(f"No se pudo cambiar la shell automaticamente: {e}")
+        logger.info(f"Puedes hacerlo manualmente con: chsh -s {zsh_path}")
+
+# ==========================================
+# FUNCIONES DE INSTALACION (MODELOS)
+# ==========================================
+
 def setup_ollama(logger, selected_models):
     """Instala Ollama SOLO si hay modelos seleccionados"""
     if not selected_models: return
@@ -184,7 +235,12 @@ def setup_ollama(logger, selected_models):
     # Verificamos PATH manual
     user_bin = Path.home() / ".local" / "bin"
     ollama_bin = user_bin / "ollama"
-    
+
+    # ASEGURAR PATH GLOBALMENTE (Siempre, por si acaso)
+    if str(user_bin) not in os.environ["PATH"]:
+         os.environ["PATH"] = f"{user_bin}:{os.environ['PATH']}"
+         # logger.info(f"Agregado {user_bin} al PATH actual.") # Verbose off
+
     is_installed = False
     if ollama_bin.exists():
         is_installed = True
@@ -193,56 +249,73 @@ def setup_ollama(logger, selected_models):
 
     if not is_installed:
         logger.step("Instalando Motor Ollama (Requerido para IA local)")
-        # 1. Intento descarga manual directa (GitHub)
-        installed_manual = False
-        try:
-            logger.info("Intentando descarga directa desde GitHub...")
-            arch = os.uname().machine
-            if arch == "x86_64": arch = "amd64"
-            elif arch in ["aarch64", "arm64"]: arch = "arm64"
-            
-            url = f"https://github.com/ollama/ollama/releases/latest/download/ollama-linux-{arch}.tgz"
-            
-            # Dir temporal
-            import tempfile
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                tmp_tar = Path(tmpdirname) / "ollama.tgz"
-                subprocess.run(["curl", "-L", "-o", str(tmp_tar), url], check=True)
-                subprocess.run(["tar", "-xzf", str(tmp_tar), "-C", tmpdirname], check=True)
-                
-                # Mover binario
-                binary_src = Path(tmpdirname) / "bin" / "ollama" 
-                # A veces el tar tiene ./bin/ollama o solo ./ollama?
-                # Revisar estructura: ollama-linux-amd64.tgz -> ./bin/ollama
-                
-                if not binary_src.exists():
-                     # Intento raiz
-                     binary_src = Path(tmpdirname) / "ollama"
-                
-                if binary_src.exists():
-                    user_bin.mkdir(parents=True, exist_ok=True)
-                    target = user_bin / "ollama"
-                    shutil.copy2(binary_src, target)
-                    target.chmod(0o755)
-                    logger.success(f"Ollama instalado en {target}")
-                    installed_manual = True
-                else:
-                    logger.warning("No se encontro binario en el tgz.")
 
-        except Exception as e:
-            logger.error(f"Fallo descarga manual: {e}")
+        # 1. Intento OFICIAL (curl | sh) - Petición del usuario
+        installed_ok = False
+        logger.info("Metodo 1: Script oficial (speed preferido)...")
+        try:
+             # Pipe a sh puede retornar 0 si sh corre bien aunque curl falle.
+             # Solucion: set -o pipefail si es bash, o verificar binario despues.
+             cmd = "curl -fsSL https://ollama.com/install.sh | sh"
+             subprocess.run(cmd, shell=True, check=True)
+             
+             # VERIFICACION EXTRA: ¿Realmente se instalo?
+             if subprocess.run("command -v ollama", shell=True, stdout=subprocess.DEVNULL).returncode == 0:
+                 installed_ok = True
+                 logger.success("Ollama instalado via script oficial.")
+             else:
+                 logger.warning("El script oficial corrio pero no se encuentra 'ollama'. Posible fallo de red en curl.")
+
+        except subprocess.CalledProcessError:
+             logger.warning("Fallo script oficial. Intentando metodo 2...")
+
+        # 2. Intento descarga manual directa (Fallback 1)
+        if not installed_ok:
+            try:
+                logger.info("Metodo 2: Descarga manual desde GitHub...")
+                arch = os.uname().machine
+                if arch == "x86_64": arch = "amd64"
+                elif arch in ["aarch64", "arm64"]: arch = "arm64"
+                
+                url = f"https://github.com/ollama/ollama/releases/latest/download/ollama-linux-{arch}.tgz"
+                
+                # Dir temporal
+                import tempfile
+                with tempfile.TemporaryDirectory() as tmpdirname:
+                    tmp_tar = Path(tmpdirname) / "ollama.tgz"
+                    subprocess.run(["curl", "-L", "-o", str(tmp_tar), url], check=True)
+                    subprocess.run(["tar", "-xzf", str(tmp_tar), "-C", tmpdirname], check=True)
+                    
+                    # Mover binario
+                    binary_src = Path(tmpdirname) / "bin" / "ollama" 
+                    if not binary_src.exists():
+                         binary_src = Path(tmpdirname) / "ollama"
+                    
+                    if binary_src.exists():
+                        user_bin.mkdir(parents=True, exist_ok=True)
+                        target = user_bin / "ollama"
+                        shutil.copy2(binary_src, target)
+                        target.chmod(0o755)
+                        logger.success(f"Ollama instalado en {target}")
+                        installed_ok = True
+                    else:
+                        logger.warning("No se encontro binario en el tgz.")
+
+            except Exception as e:
+                logger.error(f"Fallo descarga manual: {e}")
         
-        # 2. Fallback a Script
-        if not installed_manual:
-             logger.info("Usando script de instalacion (Fallback)...")
+        # 3. Intento Script Local (Fallback 2 - Ultimo recurso)
+        if not installed_ok:
+             logger.info("Metodo 3: Script local de emergencia...")
              try:
                 local_script = Path(__file__).parent / "src" / "scripts" / "install_ollama.sh"
                 if local_script.exists():
                     subprocess.run(f"sh {local_script}", shell=True, check=True)
                 else:
-                    subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
+                    logger.error("No se encontro script local. Instalacion fallida.")
+                    return
              except subprocess.CalledProcessError:
-                logger.error("Fallo la instalacion de Ollama.")
+                logger.error("Fallo la instalacion de Ollama (Todos los metodos).")
                 return
 
     if not ensure_ollama_running():
@@ -293,6 +366,10 @@ def setup_ollama(logger, selected_models):
                     # Reemplazamos las variables
                     final_modelfile = template_content.replace("${BASE_MODEL}", tag_original)
                     final_modelfile = final_modelfile.replace("${SYSTEM_PROMPT}", system_prompt)
+                    
+                    # Parametros extra (Ej: Temperatura)
+                    params = MODEL_PARAMS.get(menu_id, "")
+                    final_modelfile = final_modelfile.replace("${PARAMETERS}", params)
 
                     # Escribimos el archivo final temporalmente
                     modelfile_path = "Modelfile.gen"
@@ -384,7 +461,7 @@ def setup_gemini(logger, tui):
     try:
         # Actualizar pip primero para evitar warnings
         subprocess.run([str(pip_bin), "install", "-q", "--upgrade", "pip"], check=True)
-        subprocess.run([str(pip_bin), "install", "-q", "google-generativeai"], check=True)
+        subprocess.run([str(pip_bin), "install", "-q", "google-genai"], check=True)
     except:
         logger.error("Fallo pip install.")
         return
@@ -519,6 +596,7 @@ def main():
     if "zsh" in state["pkgs_base"]:
         logger.step("Configurando Shell")
         install_omz(logger)
+        set_default_shell(logger)
 
     # 4. Dotfiles
     if state["dotfiles"]:
@@ -540,7 +618,8 @@ def main():
         setup_gemini(logger, tui)
 
     logger.step("FINALIZADO")
-    logger.info("Reinicia tu terminal para ver los cambios. O usa 'zsh' para iniciar.")
+    logger.info("Reinicia tu terminal para ver los cambios.")
+    print("\n[TIP] Para revertir tu shell a Bash, ejecuta: chsh -s $(which bash)")
 
 if __name__ == "__main__":
     try: main()

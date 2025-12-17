@@ -23,3 +23,7 @@
 ## Necesidades nuevas/deducidas *(SI MODIFICAR)*
 
 *El agente PUEDE agregar o modificar las necesidades nuevas/deducidas*
+
+- **Prioridad de Instalación**: El usuario prefiere métodos oficiales rápidos (`curl | sh`) sobre descargas manuales, pero exige robustez (fallbacks) si estos fallan.
+- **Estabilidad**: Evitar falsos positivos en pipes de shell (`curl | sh`).
+- **Persistencia**: El usuario requiere que la shell por defecto cambie *realmente* y persista tras reinicios, lo cual ha mostrado dificultades en entornos Docker/Sudo.

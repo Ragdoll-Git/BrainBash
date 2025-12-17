@@ -1,10 +1,10 @@
 ---
-description: Restaura la memoria de la IA de sesiones anteriores usando AI_Journal.md
+description: Restaura la memoria de la IA de sesiones anteriores usando los archivos de /.ai
 ---
 
 # Workflow de memory-restore
 
-## 1. Lee el archivo Changelog.md, project_objetives.md y questions.md, usando el servidor MCP
+## 1. Lee el archivo AI_Journal.md, Changelog.md, project_objetives.md y questions.md, usando el servidor MCP
 
 ## 2. Revisa primero mis Necesidades y tus Reglas de Comportamiento
 
