@@ -4,18 +4,25 @@
 
 *Esta sección es la fuente de verdad sobre lo que el usuario quiere y necesita.*
 
-- **Propósito del Proyecto:** El nombre del proyectro se llama BrainBash. Es un entorno personalizado de desarrollo en la terminal de Linux, con integracion en la terminal de IA local y un respaldo en la nube (Gemini).
+- **Propósito del Proyecto:** El nombre del proyecto se llama BrainBash. Es un entorno personalizado para la terminal de Linux, usando zsh, y paquetes extra como eza, bat, starship, con integracion de IA local en la terminal, y respaldo en la nube (Gemini).
+
 - **Necesidades Explícitas/Deducidas:**
-  - [x] Contexto Compartido (`context.md`) para IAs (Gemini, Ollama).
-  - [x] Modelos Específicos: Qwen 3 (qwen3:0.6b), Gemma 3 (gemma3:1b), Phi 4 Mini (phi4-mini:latest).
-  - [x] Robustez en entornos sin SUDO (Docker) y sin TUI gráfica (whiptail).
-  - [x] Instalación resiliente (retry/catch en descargas).
-  - [x] Configuración interactiva de API Keys.
+  - Detectar las necesidades nuevas del usuario que ha mencionado o se han detectado/deducido en cada sesion, y agregarlas en el archivo project_objetives.md. Esas necesidades deben ser las prioridades mas altas para respetar en el proyecto.
+
+  - El codigo existe en un entorno de desarrollo en Windows, por lo que hay que tener en cuenta que el agente debe sugerir herramientas, configuraciones o comandos que sean compatibles con la terminal de Windows (CMD, PowerShell, Git Bash).
+  
+  - El codigo debe ser ready to go (listo para ser desplegado en produccion), por lo que se debe evitar el codigo que no sea necesario para el entorno de produccion. Como variables de entorno hardcodeadas, uso de root, direcciones hardcodeadas, API keys, logs, etc. Todo lo que no represente un entorno de usuario real.
+
+  - Se esta usando contenedor en docker para validar el proyecto en diferentes entornos. Como Alpine, Debian, Fedora. El agente tiene la libertad de sugerir, agregar o implementar herramientas, configuraciones o comandos de pruebas para validar localmente el proyecto de la manera mas rapida y eficiente.
+
 - **Limitaciones del Agente:**
-  - [ ] Los modelos de IA local no deben modificarse, son esos modelos, y la verificacion de que existen se encuentra documentado en la seccion *Documentacion*
-  - [ ] Acceso restringido a `.ai/` (requiere bypass via comandos).
+  - Los modelos de IA local no deben modificarse, son esos modelos, y la verificacion de que existen se encuentra documentado en la seccion *Documentacion*
+
 - **Objetivos Secundarios:**
-  - [x] Mantener limpieza.
+  - Hacer el codigo modular, robusto y lo mas simple posible, siguiendo buenas practicas de programacion,
+    - S.O.L.I.D (Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion),
+    - K.I.S.S (Keep It Simple, Stupid),
+    - D.R.Y (Don't Repeat Yourself)
 
 ## 2. Documentacion general
 
@@ -33,56 +40,31 @@ Link a modelos de IA:
 **INSTRUCCIÓN INVIOLABLE:**
 Ante cualquier duda: **PREGUNTAR**.
 
-- **No asumir NADA** ni inventar información que no haya sido dada explícitamente.
+- **No asumir NADA**, no inventar información que no haya sido dada explícitamente.
 - Hacer preguntas de seguimiento después de la respuesta del usuario o en cualquier momento que sea necesario.
 - **Principio Rector:** Es mejor mantener informado al usuario de las decisiones que se vayan a tomar antes de actuar, que asumir y equivocarse.
 
 ## 3. Registro de Estado del Proyecto
 
-*Log de cambios recientes y estado actual.*
-
-- **Fecha: 2025-12-16 (Sesión Anterior)**
-  - **Cambios:**
-    - Implementación de `config/context.md` y sistema de plantillas `Modelfile`.
-    - Fix crítico para uso de `sudo` en Docker (detección dinámica de root).
-    - Implementación de `_simple_checklist` para TUI fallback (sin whiptail).
-    - Corrección de tags de modelos Ollama a versiones válidas (`qwen3`, `gemma3`, `phi4-mini`).
-    - Agregado `htop` a paquetes extra (instalación vía apt).
-    - Prompt interactivo para Gemini API Key y corrección de alias zsh.
-    - Auto-arranque de servidor `ollama serve` si está detenido.
-  - **Estado funcional:** Estable. Instalador probado en Docker y validado por usuario.
-
-- **Fecha: 2025-12-16 (Inicial)**
-  - Cambios: Creación inicial del archivo AI_JOURNAL.md.
-  - Estado funcional: Inicialización.
-
-- **Fecha: 2025-12-16 (Sesión Actual - Fin)**
-  - **Estado**: Funcional y Multi-Distro (Debian, Alpine, Fedora).
-  - **Cambios Principales**:
-    - **Soporte Alpine**: `sudo` dinámico, paquetes nativos APK para `ollama`, `eza`, `bat` (evitando segfaults de musl).
-    - **Soporte Fedora**: Instalación manual (GitHub) para herramientas faltantes en repos (`eza`, `starship`, etc.).
-    - **Workflow Desarrollo**: `install.sh` ahora detecta entorno local ("Dev Mode") y evita clonar.
-    - **Dependencias**: Agregados `nano`, `whiptail`/`newt` al bootstrap.
-    - **Ollama**: Lógica inversa (Manual > Script) y compatibilidad Alpine (`gcompat`).
+- Realice un registro de los cambios que se vayan haciendo en el proyecto detalladamente y en orden cronologico (fecha y hora), y lo mas reciente al principio.
+- El registro se debe hacer en el archivo changelog.md
+- Explique en el registro que cambios se hicieron, por que se hicieron y como se hicieron. Todo de la forma mas detallada y posible, no importa la cantidad de letras o espacio que ocupe.
 
 ## 4. Decisiones Técnicas
 
-- **[Decisión]:** Empaquetar `install_ollama.sh` localmente para evitar errores 404/timeout de `ollama.com`.
-- **[Decisión]:** Separar secretos en `.brainbash_secrets` (sourced por zshrc) para evitar contaminar el historial de git con API Keys personales.
-- **[Decisión]:** **Alpine**: Usar paquetes nativos APK para `ollama` y herramientas modernas siempre que sea posible para evitar problemas de ABI (glibc vs musl). Solo usar manual para lo que no existe (`tldr`).
-- **[Decisión]:** **Fedora**: Usar instalación manual (GitHub releases) para herramientas modernas que no están en los repositorios base, evitando fallos de `dnf`.
-- **[Decisión]:** **Install Script**: Detectar la presencia de `main.py` para asumir "Modo Desarrollo" y usar los archivos locales en lugar de un `git clone` fresco.
+- Explique en el registro que decisiones se tomaron, por que se tomaron y como se tomaron. Todo de la forma mas detallada y posible, no importa la cantidad de letras o espacio que ocupe.
+- Las decisiones tomadas en el proyecto debe decirse quien la ha tomado, por el usuario o por el agente, y deben registrarse en el archivo changelog.md. Por Ej: [Decision]: Hecha por el usuario, o [Decision]: Hecha por el agente.
+- Cada decision debe estar en orden cronologico (fecha y hora), y lo mas reciente al principio.
 
 ## 5. Próximos Pasos y tareas pendientes
 
-- [x] Refinar detección de SO (DNF, Pacman/Alpine) - Quedó pendiente de validación profunda.
-- [ ] Probar instalación en un entorno "limpio" real (no Docker) para validar paths absolutos si los hubiera.
-- [x] Invertir el paso de instalacion de Ollama, si no se puede descargar desde GitHub, se debe instalar desde ollama_install.sh
-- [x] Agregar paquetes nano, python3 y whiptail a los contenedores docker de debian, alpine y fedora. Para poder usarlos en el script de instalacion.
-- [ ] Ajustar temperatura de Gemma (es muy creativa y se desvía del contexto).
+- Todas las tareas hechas o pendientes se deben registrar en el archivo changelog.md. Cada tarea debe estar en orden cronologico (fecha y hora), y lo mas reciente al principio.
+- Las tareas completadas pueden marcarse con [x] y las pendientes con [ ]
+- Las tareas realizadas deben estar vinculadas con las decisiones y los cambios que se hicieron en el proyecto.
+  - Por ej: [x] Invertir el paso de instalacion de Ollama, si no se puede descargar desde GitHub, se debe instalar desde ollama_install.sh,
+    - **Decision:** Hecha por el usuario, o **Decision:** Hecha por el agente
+    - Se realizo el cambio, cambiando el orden de la instalacion de Ollama, ejecutando la url <https://github.com/ollama/ollama/releases/latest/download/ollama-linux-{arch}.tgz> antes de ollama_install.sh. Se cambio el codigo desde la linea 204 a 250 en el archivo main.py, y archivo2.py, etc.
 
 ## 6. FAQ / Preguntas para el Usuario
 
-*Espacio para que el agente deje preguntas pendientes si la sesión termina y hay dudas no resueltas. Sea especifico y detallado con las preguntas.*
-
-(Sin preguntas pendientes)
+- En el archivo questions.md el agente debe dejar preguntas pendientes si la sesión termina y hay dudas/sugerencias no respondidas o resueltas. Sea especifico y detallado con las preguntas.
