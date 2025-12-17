@@ -5,7 +5,7 @@ description: Guarda la informacion de sesion en los archivos changelog, project_
 # Workflow de memory-save
 
 La sesión ha terminado.
-Actualiza .ai/Changelog.md, proyect_objetives.md y questions.md, usando las instrucciones de AI_Journal.md y la siguientes:
+Actualiza .ai/Changelog.md, proyect_objetives.md y questions.md, usando las instrucciones de AI_Journal.md y las siguientes:
 
 ## 1. Revisa si detectaste nuevas Necesidades del Usuario o limitaciones y actualizalas
 

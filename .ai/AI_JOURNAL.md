@@ -6,8 +6,8 @@
 
 - **Propósito del Proyecto:** El nombre del proyecto se llama BrainBash. Es un entorno personalizado para la terminal de Linux, usando zsh, y paquetes extra como eza, bat, starship, con integracion de IA local en la terminal, y respaldo en la nube (Gemini).
 
-- **Necesidades Explícitas/Deducidas:**
-  - Detectar las necesidades nuevas del usuario que ha mencionado o se han detectado/deducido en cada sesion, y agregarlas en el archivo project_objetives.md. Esas necesidades deben ser las prioridades mas altas para respetar en el proyecto.
+- **Necesidades Explícitas:**
+  - Detectar las necesidades nuevas en el archivo project_objetives.md, que el usuario ha mencionado o se han detectado/deducido en cada sesion. Esas necesidades deben ser las prioridades mas altas para respetar en el proyecto.
 
   - El codigo existe en un entorno de desarrollo en Windows, por lo que hay que tener en cuenta que el agente debe sugerir herramientas, configuraciones o comandos que sean compatibles con la terminal de Windows (CMD, PowerShell, Git Bash).
   
