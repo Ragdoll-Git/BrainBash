@@ -37,6 +37,11 @@ if command -v starship > /dev/null; then
     eval "$(starship init zsh)"
 fi
 
+# The Fuck (Corrector)
+if command -v thefuck > /dev/null; then
+    eval "$(thefuck --alias)"
+fi
+
 # Tema para Bat
 export BAT_THEME="Catppuccin Mocha"
 

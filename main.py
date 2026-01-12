@@ -69,7 +69,8 @@ MENU_EXTRA = [
     ("fzf", "Fzf (Buscador difuso)", "ON"),
     ("tldr", "Tldr (Ayuda simplificada)", "ON"),
     ("zoxide", "Zoxide (Navegacion inteligente)", "ON"),
-    ("starship", "Starship (Prompt)", "ON")
+    ("starship", "Starship (Prompt)", "ON"),
+    ("thefuck", "The Fuck (Corrector)", "ON")
 ]
 
 # Submenu: Modelos Local
@@ -154,6 +155,19 @@ def set_default_shell(logger):
             logger.warning("No se encontro zsh para setear default.")
             return
 
+        # 1.5 Asegurar que zsh este en /etc/shells (Vital para chsh)
+        try:
+            with open("/etc/shells", "r") as f:
+                shells = f.read()
+            if zsh_path not in shells:
+                logger.info(f"Agregando {zsh_path} a /etc/shells...")
+                # Detectar si somos root para usar sudo o no
+                cmd_prefix = "sudo " if os.geteuid() != 0 else ""
+                cmd_add = f"echo {zsh_path} | {cmd_prefix}tee -a /etc/shells"
+                subprocess.run(cmd_add, shell=True, check=True, stdout=subprocess.DEVNULL)
+        except Exception as e:
+            logger.warning(f"No se pudo verificar/editar /etc/shells: {e}")
+
         # 2. Verificar shell actual en /etc/passwd (Mas fiable que env SHELL)
         import pwd
         user_record = pwd.getpwuid(os.getuid())
@@ -161,26 +175,58 @@ def set_default_shell(logger):
         
         logger.info(f"Shell actual: {current_default_shell} | Zsh Path: {zsh_path}")
 
-        if zsh_path == current_default_shell:
-             logger.info("[Skip] Zsh ya es tu shell por defecto en /etc/passwd.")
-             return
+        changed_via_chsh = False
+        if zsh_path != current_default_shell:
+            logger.info(f"Cambiando shell por defecto a {zsh_path}...")
+            # 3. Intentar cambio (chsh/usermod)
+            try:
+                subprocess.run(["chsh", "-s", zsh_path], check=True)
+                logger.success(f"Shell por defecto cambiado a Zsh. (Reinicia sesión para aplicar)")
+                changed_via_chsh = True
+            except subprocess.CalledProcessError:
+                # Fallback: usermod
+                user_name = user_record.pw_name
+                logger.info(f"chsh falló, intentando usermod para {user_name}...")
+                try:
+                    subprocess.run(["sudo", "usermod", "--shell", zsh_path, user_name], check=True)
+                    logger.success(f"Shell cambiado con usermod.")
+                    changed_via_chsh = True
+                except subprocess.CalledProcessError:
+                    logger.error("Fallo el cambio con chsh y usermod.")
 
-        logger.info(f"Cambiando shell por defecto a {zsh_path}...")
+        # 4. Fallback FINAL: .bashrc injection (Para persistencia en entornos hostiles/Docker)
+        # Esto asegura que si entras a bash, te mande a zsh
+        bashrc_path = Path.home() / ".bashrc"
+        marker = "# BrainBash: Auto-start Zsh"
         
-        # 3. Intentar cambio
-        try:
-             subprocess.run(["chsh", "-s", zsh_path], check=True)
-             logger.success(f"Shell por defecto cambiado a Zsh. (Reinicia sesión para aplicar)")
-        except subprocess.CalledProcessError:
-             # Fallback: usermod (requiere sudo/root, pero este script suele correr asi o el usuario tiene sudo)
-             # Pero usermod necesita el nombre de usuario
-             user_name = user_record.pw_name
-             logger.info(f"chsh falló, intentando usermod para {user_name}...")
-             subprocess.run(["sudo", "usermod", "--shell", zsh_path, user_name], check=True)
-             logger.success(f"Shell cambiado con usermod.")
+        should_inject = True
+        if bashrc_path.exists():
+            with open(bashrc_path, "r") as f:
+                if marker in f.read(): should_inject = False
+        
+        if should_inject:
+            logger.info("Agregando fallback de auto-arranque en .bashrc...")
+            # USAMOS DETECCION DINAMICA AHORA (Mas robusto que hardcode)
+            payload = f"""
+\n{marker}
+# Fallback: Busca zsh en el PATH y cambia si existe y es ejecutable
+ZSH_BIN=$(command -v zsh)
+if [ -n "$ZSH_BIN" ] && [ -x "$ZSH_BIN" ] && [ -z "$ZSH_VERSION" ] && [ -t 1 ]; then
+    export SHELL="$ZSH_BIN"
+    exec "$ZSH_BIN"
+fi
+"""
+            try:
+                with open(bashrc_path, "a") as f:
+                    f.write(payload)
+                logger.success("Fallback .bashrc aplicado.")
+            except Exception as e:
+                logger.warning(f"No se pudo escribir .bashrc: {e}")
+        else:
+            logger.info("Fallback .bashrc ya existe.")
 
     except Exception as e:
-        logger.warning(f"No se pudo cambiar la shell automaticamente: {e}")
+        logger.warning(f"Error en configuracion de shell: {e}")
         logger.info(f"Puedes hacerlo manualmente con: chsh -s {zsh_path}")
 
 # ==========================================

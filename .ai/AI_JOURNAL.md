@@ -15,6 +15,8 @@
 
   - Se esta usando contenedor en docker para validar el proyecto en diferentes entornos. Como Alpine, Debian, Fedora. El agente tiene la libertad de sugerir, agregar o implementar herramientas, configuraciones o comandos de pruebas para validar localmente el proyecto de la manera mas rapida y eficiente.
 
+  - Si existen contenedores docker en el proyecto, o alguna configuracion docker, pregunta si debes reiniciar los contenedores y/o hacer un rebuild.
+
 - **Limitaciones del Agente:**
   - Los modelos de IA local no deben modificarse, son esos modelos, y la verificacion de que existen se encuentra documentado en la seccion *Documentacion*
 

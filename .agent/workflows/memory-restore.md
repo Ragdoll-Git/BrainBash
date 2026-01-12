@@ -12,4 +12,4 @@ description: Restaura la memoria de la IA de sesiones anteriores usando los arch
 
 ## 4. Revisa la sección FAQ; si hay preguntas pendientes que me dejaste, entonces revisa la respuesta del usuario (si es que las ha contestado), si tienes otras házmelas ahora antes de proseguir
 
-## 4. Despues de escribir las preguntas, y basado en los Próximos Pasos, ¿por dónde empezamos hoy?
+## 5. Despues de escribir las preguntas, y basado en los Próximos Pasos, ¿por dónde empezamos hoy?

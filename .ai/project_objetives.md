@@ -20,10 +20,11 @@
 
 - Auto-arranque de terminal zsh cuando termina la instalacion. Y auto-arranque cada vez que se inicia el sistema.
 
-## Necesidades nuevas/deducidas *(SI MODIFICAR)*
+## Necesidades nuevas/deducidas *(EL AGENTE PUEDE MODIFICAR)*
 
 *El agente PUEDE agregar o modificar las necesidades nuevas/deducidas*
 
-- **Prioridad de Instalación**: El usuario prefiere métodos oficiales rápidos (`curl | sh`) sobre descargas manuales, pero exige robustez (fallbacks) si estos fallan.
-- **Estabilidad**: Evitar falsos positivos en pipes de shell (`curl | sh`).
+- **Prioridad de Instalación**: Preferir paquetes oficiales (APT) sobre descargas manuales de GitHub para mejorar estabilidad, velocidad y facilidad de actualización, usando symlinks si es necesario, pero si no es posible, usar descargas manuales de GitHub.
+- **Robustez**: Evitar falsos positivos en pipes de shell (`curl | sh`).
+- **Persistencia**: El usuario requiere que la shell por defecto cambie *realmente* y persista tras reinicios.
 - **Persistencia**: El usuario requiere que la shell por defecto cambie *realmente* y persista tras reinicios, lo cual ha mostrado dificultades en entornos Docker/Sudo.

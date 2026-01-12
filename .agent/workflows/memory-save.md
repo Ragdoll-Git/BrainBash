@@ -13,4 +13,4 @@ Actualiza .ai/Changelog.md, proyect_objetives.md y questions.md, usando las inst
 
 ## 3. Documenta el 'por qué' en Decisiones Técnicas
 
-## 4. Si tienes alguna duda sobre cómo proceder en el futuro, no asumas: escribe cualquier duda en la sección FAQ / Preguntas para el Usuario
+## 4. Si tienes alguna duda sobre cómo proceder en el futuro, no asumas: escribe cualquier duda en el archivo questions.md (sección FAQ / Preguntas para el Usuario)
