@@ -2,7 +2,7 @@
 
 ## Necesidades base *(NO MODIFICAR)*
 
-*El agente NO PUEDE agregar o modificar las necesidades base*
+El agente NO PUEDE agregar o modificar las necesidades base
 
 - Desplegar paquetes base, extra, e IAs en cualquier distribucion de forma eficiente, segura y con el menor contacto del usuario posible. Lo unico que debe hacer el usuario es ejecutar el script de instalacion, seleccionar los paquetes que desea instalar, seleccionar el modelo de IA que desea usar, y copiar la API. El programa se debe encargar de todo el resto.
 
@@ -14,7 +14,7 @@
 
 - NO cambiar los modelos específicos: Qwen 3 (qwen3:0.6b), Gemma 3 (gemma3:1b), Phi 4 Mini (phi4-mini:latest).
 
-- Robustez en entornos sin SUDO (Docker) y/o sin TUI gráfica (whiptail). Pero en entorno de produccion debe existir SUDO.
+- Robustez en entornos sin SUDO (Docker) y/o sin TUI gráfica (whiptail). Pero en entorno de producción debe existir SUDO.
 
 - Configuración interactiva de API Keys.
 
@@ -22,9 +22,10 @@
 
 ## Necesidades nuevas/deducidas *(EL AGENTE PUEDE MODIFICAR)*
 
-*El agente PUEDE agregar o modificar las necesidades nuevas/deducidas*
+El agente PUEDE agregar o modificar las necesidades nuevas/deducidas
 
 - **Prioridad de Instalación**: Preferir paquetes oficiales (APT) sobre descargas manuales de GitHub para mejorar estabilidad, velocidad y facilidad de actualización, usando symlinks si es necesario, pero si no es posible, usar descargas manuales de GitHub.
 - **Robustez**: Evitar falsos positivos en pipes de shell (`curl | sh`).
 - **Persistencia**: El usuario requiere que la shell por defecto cambie *realmente* y persista tras reinicios.
 - **Persistencia**: El usuario requiere que la shell por defecto cambie *realmente* y persista tras reinicios, lo cual ha mostrado dificultades en entornos Docker/Sudo.
+- **Limpieza de Código (Main)**: No contaminar `main.py` o archivos esenciales del codigo con lógica de pruebas o desarrollo (flags como `--auto`). Las pruebas deben vivir en scripts dedicados en la carpeta `tests/`. `main.py` es código de producción.

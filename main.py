@@ -183,15 +183,15 @@ def set_default_shell(logger):
                 subprocess.run(["chsh", "-s", zsh_path], check=True)
                 logger.success(f"Shell por defecto cambiado a Zsh. (Reinicia sesión para aplicar)")
                 changed_via_chsh = True
-            except subprocess.CalledProcessError:
+            except (subprocess.CalledProcessError, FileNotFoundError):
                 # Fallback: usermod
                 user_name = user_record.pw_name
-                logger.info(f"chsh falló, intentando usermod para {user_name}...")
+                logger.info(f"chsh falló o no existe, intentando usermod para {user_name}...")
                 try:
                     subprocess.run(["sudo", "usermod", "--shell", zsh_path, user_name], check=True)
                     logger.success(f"Shell cambiado con usermod.")
                     changed_via_chsh = True
-                except subprocess.CalledProcessError:
+                except (subprocess.CalledProcessError, FileNotFoundError):
                     logger.error("Fallo el cambio con chsh y usermod.")
 
         # 4. Fallback FINAL: .bashrc injection (Para persistencia en entornos hostiles/Docker)
@@ -452,15 +452,16 @@ def setup_ollama(logger, selected_models):
             except subprocess.CalledProcessError as e:
                 logger.error(f"Fallo al configurar {tag_alias}: {e}")
 
-def setup_gemini(logger, tui):
+def setup_gemini(logger, tui, api_key=None):
     """Configura Gemini usando el script src/gemini_tool.py"""
     logger.step("Configurando Gemini (Google AI)")
     
     # 0. Preguntar por API Key
-    print("\n--- Configuracion de API Key ---")
-    print("Si tienes una API Key de Google Gemini, ingrésala ahora.")
-    print("Si no, presiona Enter para configurar después.")
-    api_key = input("API Key > ").strip()
+    if not api_key:
+        print("\n--- Configuracion de API Key ---")
+        print("Si tienes una API Key de Google Gemini, ingrésala ahora.")
+        print("Si no, presiona Enter para configurar después.")
+        api_key = input("API Key > ").strip()
     
     if api_key:
         secrets_path = Path.home() / ".brainbash_secrets"
@@ -553,6 +554,78 @@ def main():
         "dotfiles": True    # Dotfiles SI por defecto
     }
 
+# ==========================================
+# LOGICA PRINCIPAL DE EJECUCION
+# ==========================================
+
+def run_execution_phase(state, manager, logger, tui):
+    """
+    Ejecuta el proceso de instalacion basado en el estado (state).
+    Separado de main() para permitir testing automatizado.
+    """
+    logger.step("INICIANDO DESPLIEGUE")
+
+    # 1. Update (Opcional)
+    if state["update_sys"]:
+        manager.update()
+
+    # 2. Paquetes (Base + Extra combinados)
+    all_pkgs = state["pkgs_base"] + state["pkgs_extra"]
+    if all_pkgs:
+        logger.step("Instalando Paquetes")
+        manager.install(all_pkgs)
+
+    # 3. Shell (OMZ) - Se instala si seleccionó Zsh
+    if "zsh" in state["pkgs_base"]:
+        logger.step("Configurando Shell")
+        install_omz(logger)
+        set_default_shell(logger)
+
+    # 4. Dotfiles
+    if state["dotfiles"]:
+        logger.step("Aplicando Config. Personales")
+        # Asumiendo que main.py esta en la raiz del repo
+        repo_root = Path(__file__).parent.resolve()
+        dm = DotfileManager(repo_root, Path.home())
+        
+        for src, dest in DOTFILES_MAP.items():
+            dm.link(f"config/{src}", dest)
+        logger.success("Configs aplicadas.")
+
+    # 5. IA Local (Ollama + Modelos)
+    if state["models"]:
+        logger.step("Configurando IA Local")
+        setup_ollama(logger, state["models"])
+
+    # 6. IA Nube (Gemini)
+    if state["use_gemini"]:
+        # Pasamos API Key si esta en state (para tests) o None (para prompt interactivo)
+        api_key = state.get("gemini_api_key") 
+        setup_gemini(logger, tui, api_key=api_key)
+
+    logger.step("FINALIZADO")
+    logger.info("Reinicia tu terminal para ver los cambios.")
+    print("\n[TIP] Para revertir tu shell a Bash, ejecuta: chsh -s $(which bash)")
+
+# ==========================================
+# MAIN LOOP
+# ==========================================
+
+def main():
+    manager = get_manager()
+    tui = TUI()
+    logger = Logger(Colors.GREEN)
+
+    # ESTADO INICIAL
+    state = {
+        "update_sys": False, # Por defecto NO actualiza
+        "pkgs_base": [x[0] for x in MENU_BASE],  # Por defecto todos ON
+        "pkgs_extra": [x[0] for x in MENU_EXTRA], # Por defecto todos ON
+        "models": [],       # Por defecto ningun modelo local
+        "use_gemini": True, # Gemini SI por defecto
+        "dotfiles": True    # Dotfiles SI por defecto
+    }
+
     while True:
         # Calcular textos para el menu principal
         c_base = len(state["pkgs_base"])
@@ -563,13 +636,21 @@ def main():
         s_dots = "SI" if state["dotfiles"] else "NO"
 
         prefix = "sudo " if os.geteuid() != 0 else ""
+
+        # Alineacion visual (Padding) dinamica segun resolucion
+        cols, _ = shutil.get_terminal_size((80, 24))
+        # Intentamos 55 si cabe, sino reducimos. min(100, cols-4) es el ancho de la caja whiptail.
+        # Restamos aprox 25 chars para el estado y margenes internos. Minimum 40 para que se lea el texto.
+        box_w = min(100, cols - 4)
+        align_w = min(55, max(40, box_w - 25))
+        
         main_menu_opts = [
-            (TXT_UPDATE,  f"{prefix} update & upgrade           [{s_update}]"),
-            (TXT_BASE,    f"Git, Python, Zsh, Curl              [{c_base} selecc]"),
-            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide, Htop   [{c_extra} selecc]"),
-            (TXT_DOTS,    f"Configuraciones personales          [{s_dots}]"),
-            (TXT_MODELS,  f"Qwen, Gemma, Phi4                   [{c_models} selecc]"),
-            (TXT_GEMINI,  f"Gemini 2.5 flash                    [{s_gemini}]"),
+            (TXT_UPDATE,  f"{prefix} update & upgrade".ljust(align_w) + f"[{s_update}]"),
+            (TXT_BASE,    f"Git, Python, Zsh, Curl".ljust(align_w) + f"[{c_base} seleccionados]"),
+            (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide, Htop".ljust(align_w) + f"[{c_extra} seleccionados]"),
+            (TXT_DOTS,    f"Configuraciones personales".ljust(align_w) + f"[{s_dots}]"),
+            (TXT_MODELS,  f"Qwen, Gemma, Phi4".ljust(align_w) + f"[{c_models} seleccionados]"),
+            (TXT_GEMINI,  f"Gemini (3 Flash Preview/2.5 Flash|Lite)".ljust(align_w) + f"[{s_gemini}]"),
             (TXT_INSTALL, f">> INICIAR INSTALACION (ENTER)<<")
         ]
 
@@ -623,49 +704,11 @@ def main():
             break
 
     # ==========================================
-    # EJECUCION DE TAREAS (ORDEN ESPECIFICO)
+    # EJECUCION
     # ==========================================
     
-    logger.step("INICIANDO DESPLIEGUE")
-
-    # 1. Update (Opcional)
-    if state["update_sys"]:
-        manager.update()
-
-    # 2. Paquetes (Base + Extra combinados)
-    all_pkgs = state["pkgs_base"] + state["pkgs_extra"]
-    if all_pkgs:
-        logger.step("Instalando Paquetes")
-        manager.install(all_pkgs)
-
-    # 3. Shell (OMZ) - Se instala si seleccionó Zsh
-    if "zsh" in state["pkgs_base"]:
-        logger.step("Configurando Shell")
-        install_omz(logger)
-        set_default_shell(logger)
-
-    # 4. Dotfiles
-    if state["dotfiles"]:
-        logger.step("Aplicando Config. Personales")
-        repo_root = Path(__file__).parent.resolve()
-        dm = DotfileManager(repo_root, Path.home())
-        
-        for src, dest in DOTFILES_MAP.items():
-            dm.link(f"config/{src}", dest)
-        logger.success("Configs aplicadas.")
-
-    # 5. IA Local (Ollama + Modelos)
-    if state["models"]:
-        logger.step("Configurando IA Local")
-        setup_ollama(logger, state["models"])
-
-    # 6. IA Nube (Gemini)
-    if state["use_gemini"]:
-        setup_gemini(logger, tui)
-
-    logger.step("FINALIZADO")
-    logger.info("Reinicia tu terminal para ver los cambios.")
-    print("\n[TIP] Para revertir tu shell a Bash, ejecuta: chsh -s $(which bash)")
+    # Delegamos al runner
+    run_execution_phase(state, manager, logger, tui)
 
 if __name__ == "__main__":
     try: main()
