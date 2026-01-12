@@ -41,7 +41,19 @@ class TUI:
             return self._simple_checklist(title, prompt, options)
 
     def _whiptail_menu(self, title: str, prompt: str, options: List[Tuple[str, str]]) -> str:
-        args = ["whiptail", "--title", title, "--menu", prompt, "20", "75", "10"]
+        # Detectar tamaño de terminal
+        cols, lines = shutil.get_terminal_size(fallback=(80, 24))
+        
+        # Ajustar ancho (max 100, margen 4)
+        width = min(100, cols - 4)
+        if width < 40: width = 40 # Minimo razonable
+        
+        # Ajustar alto (max 22, margen 4)
+        height = min(24, lines - 4)
+        list_height = height - 8 # Espacio para bordes y titulo
+        if list_height < 2: list_height = 2
+
+        args = ["whiptail", "--title", title, "--menu", prompt, str(height), str(width), str(list_height)]
         for tag, desc in options:
             args.extend([tag, desc])
         try:
@@ -51,8 +63,20 @@ class TUI:
             sys.exit(0)
 
     def _whiptail_checklist(self, title: str, prompt: str, options: List[Tuple[str, str, str]]) -> List[str]:
+        # Detectar tamaño de terminal
+        cols, lines = shutil.get_terminal_size(fallback=(80, 24))
+        
+        # Ajustar ancho (max 100, margen 4)
+        width = min(100, cols - 4)
+        if width < 40: width = 40
+        
+        # Ajustar alto
+        height = min(26, lines - 4)
+        list_height = height - 8
+        if list_height < 2: list_height = 2
+        
         # whiptail --checklist text height width list-height [tag item status]...
-        args = ["whiptail", "--title", title, "--checklist", prompt, "22", "78", "12"]
+        args = ["whiptail", "--title", title, "--checklist", prompt, str(height), str(width), str(list_height)]
         for tag, desc, status in options:
             args.extend([tag, desc, status])
         
@@ -116,6 +140,7 @@ class Logger:
 
     def info(self, msg): print(f"{self.theme_color}[INFO]{Colors.RESET} {msg}")
     def success(self, msg): print(f"{Colors.GREEN}[OK]{Colors.RESET} {msg}")
+    def warning(self, msg): print(f"{Colors.YELLOW}[AVISO]{Colors.RESET} {msg}")
     def error(self, msg): print(f"{Colors.RED}[ERROR]{Colors.RESET} {msg}")
     def step(self, msg): print(f"\n{Colors.BOLD}{self.theme_color}=== {msg} ==={Colors.RESET}")
 

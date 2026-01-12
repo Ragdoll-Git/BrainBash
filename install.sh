@@ -10,21 +10,27 @@ echo -e "${GREEN}=== Iniciando Bootstrap de BrainBash ===${NC}"
 # 1. Detectar gestor de paquetes e instalar dependencias mínimas (Git + Python)
 echo -e "${GREEN}[+] Verificando dependencias mínimas...${NC}"
 
+# Definir comando SUDO si no somos root
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+    SUDO="sudo"
+fi
+
 if [ -f /etc/debian_version ]; then
     # Debian / Ubuntu
     if ! command -v git &> /dev/null || ! command -v python3 &> /dev/null; then
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq git python3
+        $SUDO apt-get update -qq
+        $SUDO apt-get install -y -qq git python3 nano whiptail
     fi
 elif [ -f /etc/alpine-release ]; then
     # Alpine
     if ! command -v git &> /dev/null || ! command -v python3 &> /dev/null; then
-        sudo apk add --no-cache git python3
+        $SUDO apk add --no-cache git python3 nano newt
     fi
 elif [ -f /etc/fedora-release ]; then
     # Fedora
     if ! command -v git &> /dev/null || ! command -v python3 &> /dev/null; then
-        sudo dnf install -y git python3
+        $SUDO dnf install -y git python3 nano newt
     fi
 fi
 
