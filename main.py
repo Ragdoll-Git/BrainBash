@@ -207,7 +207,7 @@ def set_default_shell(logger):
         if should_inject:
             logger.info("Agregando fallback de auto-arranque en .bashrc...")
             # USAMOS DETECCION DINAMICA AHORA (Mas robusto que hardcode)
-            payload = f\"\"\"
+            payload = f"""
 \n{marker}
 # Fallback: Busca zsh en el PATH y cambia si existe y es ejecutable
 ZSH_BIN=$(command -v zsh)
@@ -215,7 +215,7 @@ if [ -n "$ZSH_BIN" ] && [ -x "$ZSH_BIN" ] && [ -z "$ZSH_VERSION" ] && [ -t 1 ]; 
     export SHELL="$ZSH_BIN"
     exec "$ZSH_BIN"
 fi
-\"\"\"
+"""
             try:
                 with open(bashrc_path, "a") as f:
                     f.write(payload)
