@@ -54,14 +54,11 @@ Aparecerá un menú donde podrás seleccionar:
 - `qwen: "pregunta"` - Hacer pregunta y recibir respuesta, ***sin contexto***
 - `gemini: "pregunta"` - Hacer pregunta y recibir respuesta, ***sin contexto***
 
-*Nota: no usar el signo **?** al final de la pregunta*
 
 #### 2. Modo interactivo o chat
 
 - `qwen:` - Inicia una sesion/chat con el modelo Qwen 3 0.6B. ***Usa contexto de la sesion.***
 - `gemini:` - Inicia una sesion/chat con el modelo Gemini 2.5 Flash. ***Usa contexto de la sesion.***
-
-*Nota: no usar el signo **?** al final de la pregunta*
 
 ## 📦 Paquetes Incluidos
 
