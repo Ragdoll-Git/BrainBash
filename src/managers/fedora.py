@@ -45,11 +45,3 @@ class FedoraManager(PackageManager):
         for tool in manual_packages:
             # Fedora usa glibc, asi que allow_musl=False (default) esta bien
             self._install_binary(tool)
-
-    def install_fontconfig(self):
-        print("[Fedora] Instalando fontconfig...")
-        try:
-            # En Fedora, el paquete suele ser fontconfig
-            subprocess.run(self.sudo_cmd + ["dnf", "install", "-y", "fontconfig"], check=True)
-        except subprocess.CalledProcessError:
-            print("[Error] No se pudo instalar fontconfig.")

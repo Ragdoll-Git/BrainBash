@@ -2,10 +2,7 @@ import os
 import shutil
 import time
 import subprocess
-try:
-    import pwd
-except ImportError:
-    pwd = None
+import pwd
 from pathlib import Path
 
 class DotfileManager:
@@ -87,9 +84,8 @@ class DotfileManager:
              try:
                  subprocess.run(["sudo", "ln", "-sf", str(source_file), str(dest_file)], check=True)
                  # Chown del link (usamos -h para no cambiar el target)
-                 if pwd:
-                     user = pwd.getpwuid(os.getuid()).pw_name
-                     subprocess.run(["sudo", "chown", "-h", f"{user}:{user}", str(dest_file)], check=True)
+                 user = pwd.getpwuid(os.getuid()).pw_name
+                 subprocess.run(["sudo", "chown", "-h", f"{user}:{user}", str(dest_file)], check=True)
              except Exception as e:
                  print(f"[Error] Fallo enlace con sudo: {e}")
         except Exception as e:

@@ -84,11 +84,3 @@ class AlpineManager(PackageManager):
         # Base class tiene _install_binary.
         
         super()._install_binary(tool, allow_musl)
-
-    def install_fontconfig(self):
-        print("[Alpine] Instalando fontconfig...")
-        try:
-            # En Alpine, el paquete principal es fontconfig
-            subprocess.run(self.sudo_cmd + ["apk", "add", "fontconfig"], check=True)
-        except subprocess.CalledProcessError:
-            print("[Error] No se pudo instalar fontconfig.")
