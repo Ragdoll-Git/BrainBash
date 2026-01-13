@@ -67,6 +67,52 @@ class PackageManager(ABC):
     def install(self, packages: List[str]):
         pass
 
+    @abstractmethod
+    def install_fontconfig(self):
+        """Instala fontconfig para poder usar fc-cache"""
+        pass
+
+    def _install_nerd_fonts(self):
+        """Instala MesloLGS NF para Starship"""
+        print("[Fonts] Instalando Nerd Fonts (MesloLGS NF)...")
+        
+        # 1. Directorio de fuentes local
+        home = Path.home()
+        fonts_dir = home / ".local" / "share" / "fonts"
+        fonts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # URLs de MesloLGS NF
+        base_url = "https://github.com/romkatv/powerlevel10k-media/raw/master"
+        fonts = [
+            "MesloLGS NF Regular.ttf",
+            "MesloLGS NF Bold.ttf",
+            "MesloLGS NF Italic.ttf",
+            "MesloLGS NF Bold Italic.ttf"
+        ]
+        
+        try:
+            for font in fonts:
+                target = fonts_dir / font
+                if not target.exists():
+                    print(f"   > Descargando {font}...")
+                    subprocess.run(["curl", "-fLo", str(target), f"{base_url}/{font}"], check=True)
+            
+            # Refrescar cache
+            print("   > Actualizando cache de fuentes...")
+            
+            # Verificar si existe fc-cache, si no, instalar fontconfig via manager especifico
+            if not shutil.which("fc-cache"):
+                self.install_fontconfig()
+
+            if shutil.which("fc-cache"):
+                subprocess.run(["fc-cache", "-fv"], check=False, stdout=subprocess.DEVNULL)
+                print("[Fonts] Instalacion completada.")
+            else:
+                print("[Warning] 'fc-cache' no encontrado incluso tras intentar instalar fontconfig.")
+                
+        except Exception as e:
+            print(f"[Error] Fallo instalando fuentes: {e}")
+
     # ==========================================
     # METODOS DE AYUDA (Instalación manual)
     # ==========================================
@@ -157,6 +203,7 @@ class PackageManager(ABC):
                     subprocess.run(f"{sudo_prefix} mv tldr /usr/local/bin/", shell=True)
             elif tool == "starship":
                 subprocess.run("curl -sS https://starship.rs/install.sh | sh -s -- -y", shell=True)
+                self._install_nerd_fonts()
             elif tool == "zoxide":
                  # Zoxide script installs to ~/.local/bin by default usually, but we forced /usr/local/bin before
                  # The script param --bin-dir requires write access.

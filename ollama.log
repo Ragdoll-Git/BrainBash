@@ -10,3 +10,7 @@ time=2026-01-12T20:44:07.607Z level=INFO source=types.go:60 msg="inference compu
 time=2026-01-12T20:44:07.607Z level=INFO source=routes.go:1648 msg="entering low vram mode" "total vram"="0 B" threshold="20.0 GiB"
 [GIN] 2026/01/12 - 20:44:07 | 200 |      43.866µs |       127.0.0.1 | HEAD     "/"
 [GIN] 2026/01/12 - 20:44:07 | 200 |   24.598443ms |       127.0.0.1 | GET      "/api/tags"
+[GIN] 2026/01/12 - 20:44:09 | 200 |      24.097µs |       127.0.0.1 | HEAD     "/"
+[GIN] 2026/01/12 - 20:44:10 | 200 |  827.251163ms |       127.0.0.1 | POST     "/api/pull"
+[GIN] 2026/01/12 - 20:44:10 | 200 |      28.767µs |       127.0.0.1 | HEAD     "/"
+[GIN] 2026/01/12 - 20:44:10 | 200 |   98.654505ms |       127.0.0.1 | POST     "/api/create"

@@ -1,6 +1,11 @@
 import os
 import shutil
 import time
+import subprocess
+try:
+    import pwd
+except ImportError:
+    pwd = None
 from pathlib import Path
 
 class DotfileManager:
@@ -12,6 +17,31 @@ class DotfileManager:
     def __init__(self, repo_path: Path, home_path: Path):
         self.repo_path = repo_path
         self.home_path = home_path
+
+    def _ensure_dir(self, path: Path):
+        """Intenta crear directorio, usando sudo si es necesario."""
+        if path.exists():
+            return
+
+        try:
+            print(f"[Info] Creando directorio: {path}")
+            path.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            print(f"[Warn] Permiso denegado en {path}. Intentando con sudo...")
+            try:
+                # 1. Crear con sudo
+                subprocess.run(["sudo", "mkdir", "-p", str(path)], check=True)
+                
+                # 2. Corregir permisos (chown al usuario actual)
+                # Detectar usuario actual real (incluso si corremos con sudo)
+                # os.getuid() da el usuario efectivo. Si somos alumno, es alumno.
+                # Si corremos esto, esperamos ser el usuario final.
+                user = pwd.getpwuid(os.getuid()).pw_name
+                subprocess.run(["sudo", "chown", "-R", f"{user}:{user}", str(path)], check=True)
+                print(f"[Fix] Directorio creado y permisos corregidos para {user}.")
+            except Exception as e:
+                print(f"[Error] Fallo fallback de sudo: {e}")
+                raise
 
     def link(self, source_rel: str, dest_rel: str):
         """
@@ -28,9 +58,7 @@ class DotfileManager:
             return
 
         # 2. Asegurar que el directorio destino existe
-        if not dest_file.parent.exists():
-            print(f"[Info] Creando directorio: {dest_file.parent}")
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_dir(dest_file.parent)
 
         # 3. Verificar estado del destino
         if dest_file.is_symlink():
@@ -54,5 +82,15 @@ class DotfileManager:
         try:
             dest_file.symlink_to(source_file)
             print(f"[Link] Creado: {dest_rel} -> {source_rel}")
+        except PermissionError:
+             print(f"[Warn] Permiso denegado al crear enlace. Intentando sudo...")
+             try:
+                 subprocess.run(["sudo", "ln", "-sf", str(source_file), str(dest_file)], check=True)
+                 # Chown del link (usamos -h para no cambiar el target)
+                 if pwd:
+                     user = pwd.getpwuid(os.getuid()).pw_name
+                     subprocess.run(["sudo", "chown", "-h", f"{user}:{user}", str(dest_file)], check=True)
+             except Exception as e:
+                 print(f"[Error] Fallo enlace con sudo: {e}")
         except Exception as e:
             print(f"[Error] Fallo al enlazar {dest_rel}: {e}")
