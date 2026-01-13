@@ -112,8 +112,19 @@ class DebianManager(PackageManager):
 
         # 2. Binarios GitHub (Extra)
         for tool in manual_packages:
-            self._install_binary(tool)
+            if tool == "starship":
+                self._install_binary(tool)
+                # self._install_nerd_fonts() # Auto-instalamos fuentes con Starship (Ahora handled by core)
+            else:
+                self._install_binary(tool)
     
+    def install_fontconfig(self):
+        print("[Debian] Instalando fontconfig...")
+        try:
+            subprocess.run(self.sudo_cmd + ["apt", "install", "-y", "fontconfig"], check=True)
+        except subprocess.CalledProcessError:
+            print("[Error] No se pudo instalar fontconfig. Los iconos podrian no cargar correctamente.")
+
     def _get_arch_terms(self):
         import platform
         arch = platform.machine().lower()
