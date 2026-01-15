@@ -52,6 +52,10 @@ class PackageManager(ABC):
         if self.logger: self.logger.info(msg)
         else: print(f"[INFO] {msg}")
 
+    def _log_success(self, msg):
+        if self.logger: self.logger.success(msg)
+        else: print(f"[OK] {msg}")
+
     def _log_warn(self, msg):
         if self.logger: self.logger.warning(msg)
         else: print(f"[WARN] {msg}")
