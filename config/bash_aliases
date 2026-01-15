@@ -1,14 +1,13 @@
-# AI Commands
-alias gemini="gemini"
-alias qwen="qwen"
-alias gemma="gemma"
-alias phi="phi"
+# Starship Prompt
+if command -v starship &> /dev/null; then
+    eval "$(starship init bash)"
+fi
 
-# Strict syntax (colon required) -> mapped to standard command
-alias gemini:="gemini"
-alias qwen:="qwen"
-alias gemma:="gemma"
-alias phi:="phi"
+# AI Commands
+alias gemini="gemini:"
+alias qwen="qwen:"
+alias gemma="gemma:"
+alias phi="phi:"
 
 # Zoxide (Smart directory jumper)
 eval "$(zoxide init bash)"
