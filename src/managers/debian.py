@@ -7,17 +7,17 @@ from ..core import PackageManager
 
 class DebianManager(PackageManager):
     def update(self):
-        print("[Debian] Ejecutando actualización completa del sistema...")
+        self._log_info("Ejecutando actualización completa del sistema...")
         try:
             # sudo apt update && sudo apt upgrade -y && sudo apt autoremove -y
             subprocess.run(self.sudo_cmd + ["apt", "update"], check=True)
             subprocess.run(self.sudo_cmd + ["apt", "upgrade", "-y"], check=True)
             subprocess.run(self.sudo_cmd + ["apt", "autoremove", "-y"], check=True)
             # Actualizamos pip aqui para evitar warnings al final
-            print("[Debian] Actualizando pip...")
+            self._log_info("Actualizando pip...")
             subprocess.run(self.sudo_cmd + ["python3", "-m", "pip", "install", "--upgrade", "pip", "--break-system-packages"], check=False)
         except subprocess.CalledProcessError:
-            print("[Error] Falló la actualización. Continuando bajo su propio riesgo...")
+            self._log_error("Falló la actualización. Continuando bajo su propio riesgo...")
 
     def install(self, packages: List[str]):
         apt_packages = []
@@ -46,7 +46,7 @@ class DebianManager(PackageManager):
         if apt_packages:
             extras = ["curl", "wget", "tar", "unzip", "python3-venv", "procps"] 
             to_install = list(set(apt_packages + extras))
-            print(f"[APT] Instalando: {', '.join(to_install)}")
+            self._log_info(f"Instalando via APT: {', '.join(to_install)}")
             # Intento de instalacion con Auto-Healing (Retry con Update)
             max_retries = 1
             for attempt in range(max_retries + 1):
@@ -55,31 +55,30 @@ class DebianManager(PackageManager):
                     break # Exito
                 except subprocess.CalledProcessError:
                     if attempt < max_retries:
-                        print("[APT] Fallo la instalacion. Intentando 'apt update' y reintentando...")
+                        self._log_warn("Fallo la instalacion APT. Intentando 'apt update' y reintentando...")
                         try:
                             subprocess.run(self.sudo_cmd + ["apt", "update"], check=True)
                         except:
                             pass # Si update falla, igual intentamos install una vez mas por si acaso
                     else:
-                        print("[Error] Fallo APT definitivamente.")
+                        self._log_error("Fallo APT definitivamente.")
 
-            # Post-Install Hacks (Symlinks & Configs) - Solo si APT no falló catastróficamente
-            # (Si falló, installed_successfully seria ideal, pero aqui el script sigue con what's left)
+            # Post-Install Hacks (Symlinks & Configs)
             
             # 1. exa -> eza
             if "exa" in to_install:
                     if shutil.which("exa") and not shutil.which("eza"):
-                        print("[Fix] Creando symlink eza -> exa...")
+                        self._log_info("Creando symlink eza -> exa...")
                         subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/exa", "/usr/local/bin/eza"], check=False)
             
             # 2. bat -> batcat
             if "bat" in to_install:
                     if shutil.which("batcat") and not shutil.which("bat"):
-                        print("[Fix] Creando symlink bat -> batcat...")
+                        self._log_info("Creando symlink bat -> batcat...")
                         subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/batcat", "/usr/local/bin/bat"], check=False)
                     
                     # 3. Instalar Tema Catppuccin Mocha
-                    print("[Theme] Instalando Catppuccin Mocha para bat...")
+                    self._log_info("Instalando Catppuccin Mocha para bat...")
                     try:
                         config_dir = subprocess.check_output(["batcat", "--config-dir"], text=True).strip()
                     except:
@@ -91,43 +90,43 @@ class DebianManager(PackageManager):
                     theme_url = "https://raw.githubusercontent.com/catppuccin/bat/main/themes/Catppuccin%20Mocha.tmTheme"
                     subprocess.run(self.sudo_cmd + ["curl", "-L", "-o", f"{themes_dir}/Catppuccin Mocha.tmTheme", theme_url], check=False)
                     
-                    print("[Theme] Reconstruyendo cache de bat...")
+                    self._log_info("Reconstruyendo cache de bat...")
                     subprocess.run(self.sudo_cmd + ["batcat", "cache", "--build"], check=False)
 
             # 3. tealdeer -> tldr
             if "tealdeer" in to_install:
                     if shutil.which("tealdeer") and not shutil.which("tldr"):
-                        print("[Fix] Creando symlink tldr -> tealdeer...")
+                        self._log_info("Creando symlink tldr -> tealdeer...")
                         subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/tealdeer", "/usr/local/bin/tldr"], check=False)
                     
-                    print("[TLDR] Actualizando cache (esto puede tardar)...")
+                    self._log_info("Actualizando cache TLDR (esto puede tardar)...")
                     import time
                     for i in range(3):
                         try:
-                            print(f"   > Intento {i+1}/3...")
+                            self._log_info(f"   > Intento {i+1}/3...")
                             subprocess.run(self.sudo_cmd + ["tldr", "--update"], check=True)
-                            print("[TLDR] Cache actualizado.")
+                            self._log_success("Cache TLDR actualizado.")
                             break
                         except subprocess.CalledProcessError:
-                            print(f"   [!] Fallo intento {i+1}. Reintentando en 3s...")
+                            self._log_warn(f"   [!] Fallo intento {i+1}. Reintentando en 3s...")
                             time.sleep(3)
                     else:
-                        print("[Warning] No se pudo actualizar TLDR. Ejecuta 'tldr --update' manualmente luego.")
+                        self._log_warn("No se pudo actualizar TLDR. Ejecuta 'tldr --update' manualmente luego.")
 
         # 2. Binarios GitHub (Extra)
         for tool in manual_packages:
             if tool == "starship":
                 self._install_binary(tool)
-                # self._install_nerd_fonts() # Auto-instalamos fuentes con Starship (Ahora handled by core)
+                self._install_nerd_fonts() # Auto-instalamos fuentes con Starship (Ahora handled by core)
             else:
                 self._install_binary(tool)
     
     def install_fontconfig(self):
-        print("[Debian] Instalando fontconfig...")
+        self._log_info("Instalando fontconfig...")
         try:
             subprocess.run(self.sudo_cmd + ["apt", "install", "-y", "fontconfig"], check=True)
         except subprocess.CalledProcessError:
-            print("[Error] No se pudo instalar fontconfig. Los iconos podrian no cargar correctamente.")
+            self._log_error("No se pudo instalar fontconfig. Los iconos podrian no cargar correctamente.")
 
     def _get_arch_terms(self):
         import platform
@@ -139,7 +138,7 @@ class DebianManager(PackageManager):
     def _download_github_asset(self, repo, keyword, output_name, allow_musl=False):
         import urllib.request
         import json
-        print(f"⬇️  [GitHub] Buscando {output_name} en {repo}...")
+        self._log_info(f"Buscando {output_name} en {repo}...")
         try:
             api_url = f"https://api.github.com/repos/{repo}/releases/latest"
             req = urllib.request.Request(api_url, headers={'User-Agent': 'python'})
@@ -162,7 +161,7 @@ class DebianManager(PackageManager):
             subprocess.run(["curl", "-L", "-o", output_name, download_url], check=True)
             return True
         except Exception as e:
-            print(f"[DEBUG ERROR] Download failed: {e}")
+            self._log_error(f"Download failed: {e}")
             return False
 
     def _install_binary(self, tool):

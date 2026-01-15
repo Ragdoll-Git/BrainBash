@@ -43,6 +43,22 @@ class PackageManager(ABC):
     def __init__(self, distro_id: str):
         self.distro_id = distro_id
         self._sudo_cmd = [] if os.geteuid() == 0 else ["sudo"]
+        self.logger = None
+
+    def set_logger(self, logger):
+        self.logger = logger
+
+    def _log_info(self, msg):
+        if self.logger: self.logger.info(msg)
+        else: print(f"[INFO] {msg}")
+
+    def _log_warn(self, msg):
+        if self.logger: self.logger.warning(msg)
+        else: print(f"[WARN] {msg}")
+
+    def _log_error(self, msg):
+        if self.logger: self.logger.error(msg)
+        else: print(f"[ERROR] {msg}")
         
     @property
     def sudo_cmd(self) -> List[str]:
@@ -74,7 +90,7 @@ class PackageManager(ABC):
 
     def _install_nerd_fonts(self):
         """Instala MesloLGS NF para Starship"""
-        print("[Fonts] Instalando Nerd Fonts (MesloLGS NF)...")
+        self._log_info("Instalando Nerd Fonts (MesloLGS NF)...")
         
         # 1. Directorio de fuentes local
         home = Path.home()
@@ -94,11 +110,11 @@ class PackageManager(ABC):
             for font in fonts:
                 target = fonts_dir / font
                 if not target.exists():
-                    print(f"   > Descargando {font}...")
+                    self._log_info(f"   > Descargando {font}...")
                     subprocess.run(["curl", "-fLo", str(target), f"{base_url}/{font}"], check=True)
             
             # Refrescar cache
-            print("   > Actualizando cache de fuentes...")
+            self._log_info("   > Actualizando cache de fuentes...")
             
             # Verificar si existe fc-cache, si no, instalar fontconfig via manager especifico
             if not shutil.which("fc-cache"):
@@ -106,12 +122,12 @@ class PackageManager(ABC):
 
             if shutil.which("fc-cache"):
                 subprocess.run(["fc-cache", "-fv"], check=False, stdout=subprocess.DEVNULL)
-                print("[Fonts] Instalacion completada.")
+                self._log_info("Instalacion de fuentes completada.")
             else:
-                print("[Warning] 'fc-cache' no encontrado incluso tras intentar instalar fontconfig.")
+                self._log_warn("'fc-cache' no encontrado incluso tras intentar instalar fontconfig.")
                 
         except Exception as e:
-            print(f"[Error] Fallo instalando fuentes: {e}")
+            self._log_error(f"Fallo instalando fuentes: {e}")
 
     # ==========================================
     # METODOS DE AYUDA (Instalación manual)
@@ -160,10 +176,10 @@ class PackageManager(ABC):
 
     def _install_binary(self, tool, allow_musl=False):
         if shutil.which(tool):
-            print(f"[Skip] {tool} ya está instalado.")
+            self._log_info(f"{tool} ya está instalado.")
             return
             
-        print(f"[Binario] Instalando {tool}...")
+        self._log_info(f"Instalando {tool}...")
         original_cwd = os.getcwd()
         temp_dir = Path("/tmp/brainbash_bin")
         if temp_dir.exists(): shutil.rmtree(temp_dir)
@@ -208,12 +224,13 @@ class PackageManager(ABC):
                  # Zoxide script installs to ~/.local/bin by default usually, but we forced /usr/local/bin before
                  # The script param --bin-dir requires write access.
                  # Using sudo if needed.
+                 # Updated URL to use verified one if needed
                  cmd = f"curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | {sudo_prefix} sh -s -- --bin-dir /usr/local/bin"
                  subprocess.run(cmd, shell=True)
             
-            print(f"{tool} instalado.")
+            self._log_info(f"{tool} instalado.")
         except Exception as e:
-            print(f"Error {tool}: {e}")
+            self._log_error(f"Error {tool}: {e}")
         finally:
             os.chdir(original_cwd)
             shutil.rmtree(temp_dir, ignore_errors=True)

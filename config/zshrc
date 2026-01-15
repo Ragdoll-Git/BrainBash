@@ -110,23 +110,24 @@ check_ollama() {
 # (El script setup.py crea el alias 'gemini' apuntando al venv)
 # Solo necesitamos asegurarnos que ~/.local/bin este en PATH
 export PATH="$HOME/.local/bin:$PATH"
+alias gemini:="gemini"
 
 # 2. MODELOS LOCALES (Ollama)
 # Estos alias llaman a los scripts wrapper creados por el instalador
 
 # Qwen (Coding/Ligero)
 if [ -f "$HOME/.local/bin/qwen" ]; then
-    alias qwen='check_ollama && "$HOME/.local/bin/qwen"'
+    alias qwen:='check_ollama && "$HOME/.local/bin/qwen"'
 fi
 
 # Gemma (Balanceado)
 if [ -f "$HOME/.local/bin/gemma" ]; then
-    alias gemma='check_ollama && "$HOME/.local/bin/gemma"'
+    alias gemma:='check_ollama && "$HOME/.local/bin/gemma"'
 fi
 
 # Phi (Razonamiento)
 if [ -f "$HOME/.local/bin/phi" ]; then
-    alias phi='check_ollama && "$HOME/.local/bin/phi"'
+    alias phi:='check_ollama && "$HOME/.local/bin/phi"'
 fi
 
 # Acceso directo al manager de modelos

@@ -135,14 +135,47 @@ class TUI:
         return [tag for tag, is_on in selection_state.items() if is_on]
 
 class Logger:
-    def __init__(self, theme_color: str = Colors.BLUE):
+    def __init__(self, theme_color: str = Colors.BLUE, log_file: str = None):
         self.theme_color = theme_color
+        self.log_file = log_file
+        
+        # Initialize log file (overwrite)
+        if self.log_file:
+            try:
+                with open(self.log_file, "w", encoding="utf-8") as f:
+                    f.write("=== BrainBash Installer Log ===\n")
+            except Exception as e:
+                print(f"[Error] No se pudo crear log file: {e}")
+                self.log_file = None
 
-    def info(self, msg): print(f"{self.theme_color}[INFO]{Colors.RESET} {msg}")
-    def success(self, msg): print(f"{Colors.GREEN}[OK]{Colors.RESET} {msg}")
-    def warning(self, msg): print(f"{Colors.YELLOW}[AVISO]{Colors.RESET} {msg}")
-    def error(self, msg): print(f"{Colors.RED}[ERROR]{Colors.RESET} {msg}")
-    def step(self, msg): print(f"\n{Colors.BOLD}{self.theme_color}=== {msg} ==={Colors.RESET}")
+    def _log(self, prefix, msg, color=None, to_stdout=True):
+        # 1. Stdout
+        if to_stdout:
+            if color:
+                print(f"{color}{prefix}{Colors.RESET} {msg}")
+            else:
+                print(f"{prefix} {msg}")
+        
+        # 2. File
+        if self.log_file:
+            try:
+                # Remove ANSI colors for file
+                clean_msg = f"{prefix} {msg}\n"
+                with open(self.log_file, "a", encoding="utf-8") as f:
+                    f.write(clean_msg)
+            except: pass
+
+    def info(self, msg): self._log("[INFO]", msg, self.theme_color)
+    def success(self, msg): self._log("[OK]", msg, Colors.GREEN)
+    def warning(self, msg): self._log("[AVISO]", msg, Colors.YELLOW)
+    def error(self, msg): self._log("[ERROR]", msg, Colors.RED)
+    
+    def step(self, msg): 
+        self._log(f"\n=== {msg} ===", "", self.theme_color + Colors.BOLD)
+
+    def verbose(self, msg):
+        """Log only to file, not stdout (for streamlined operations)"""
+        self._log("[VERBOSE]", msg, to_stdout=False)
 
 if __name__ == "__main__":
     tui = TUI()

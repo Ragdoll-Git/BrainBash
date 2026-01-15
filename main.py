@@ -575,7 +575,10 @@ def setup_gemini(logger, tui, real_user, real_home, api_key=None):
 def main():
     manager = get_manager()
     tui = TUI()
-    logger = Logger(Colors.GREEN)
+    logger = Logger(Colors.GREEN, log_file="installation_log.log")
+    
+    # Inject logger into manager (for core logging)
+    manager.set_logger(logger)
 
     # ESTADO INICIAL
     state = {
@@ -716,7 +719,7 @@ def run_execution_phase(state, manager, logger, tui):
         repo_root = Path(__file__).parent.resolve()
         
         # Usamos real_home para que los dotfiles vayan al usuario, no a root
-        dm = DotfileManager(repo_root, real_home)
+        dm = DotfileManager(repo_root, real_home, logger)
         
         for src, dest in DOTFILES_MAP.items():
             dm.link(f"config/{src}", dest)
