@@ -44,71 +44,75 @@ class DebianManager(PackageManager):
 
         # 1. APT (Base)
         if apt_packages:
-            # Agregamos python3-venv para Gemini
-            extras = ["curl", "wget", "tar", "unzip", "python3-venv"] 
+            extras = ["curl", "wget", "tar", "unzip", "python3-venv", "procps"] 
             to_install = list(set(apt_packages + extras))
             print(f"[APT] Instalando: {', '.join(to_install)}")
-            try:
-                subprocess.run(self.sudo_cmd + ["apt", "install", "-y"] + to_install, check=True)
-                
-                # Post-Install Hacks (Symlinks)
-                
-                # 1. exa -> eza
-                if "exa" in to_install:
-                     if shutil.which("exa") and not shutil.which("eza"):
-                         print("[Fix] Creando symlink eza -> exa...")
-                         subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/exa", "/usr/local/bin/eza"], check=False)
-                
-                # 2. bat -> batcat
-                if "bat" in to_install:
-                     if shutil.which("batcat") and not shutil.which("bat"):
-                         print("[Fix] Creando symlink bat -> batcat...")
-                         subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/batcat", "/usr/local/bin/bat"], check=False)
-                     
-                     # 3. Instalar Tema Catppuccin Mocha
-                     print("[Theme] Instalando Catppuccin Mocha para bat...")
-                     # Obtener directorio de config (usamos batcat directo por si el symlink fallo o PATH)
-                     # Si falla batcat, fallback hardcoded
-                     try:
-                         config_dir = subprocess.check_output(["batcat", "--config-dir"], text=True).strip()
-                     except:
-                         config_dir = "/job/.config/bat" if os.environ.get("HOME") == "/job" else f"{os.environ.get('HOME', '/root')}/.config/bat"
+            # Intento de instalacion con Auto-Healing (Retry con Update)
+            max_retries = 1
+            for attempt in range(max_retries + 1):
+                try:
+                    subprocess.run(self.sudo_cmd + ["apt", "install", "-y"] + to_install, check=True)
+                    break # Exito
+                except subprocess.CalledProcessError:
+                    if attempt < max_retries:
+                        print("[APT] Fallo la instalacion. Intentando 'apt update' y reintentando...")
+                        try:
+                            subprocess.run(self.sudo_cmd + ["apt", "update"], check=True)
+                        except:
+                            pass # Si update falla, igual intentamos install una vez mas por si acaso
+                    else:
+                        print("[Error] Fallo APT definitivamente.")
 
-                     themes_dir = f"{config_dir}/themes"
-                     subprocess.run(self.sudo_cmd + ["mkdir", "-p", themes_dir], check=False)
-                     
-                     theme_url = "https://raw.githubusercontent.com/catppuccin/bat/main/themes/Catppuccin%20Mocha.tmTheme"
-                     subprocess.run(self.sudo_cmd + ["curl", "-L", "-o", f"{themes_dir}/Catppuccin Mocha.tmTheme", theme_url], check=False)
-                     
-                     print("[Theme] Reconstruyendo cache de bat...")
-                     subprocess.run(self.sudo_cmd + ["batcat", "cache", "--build"], check=False)
+            # Post-Install Hacks (Symlinks & Configs) - Solo si APT no falló catastróficamente
+            # (Si falló, installed_successfully seria ideal, pero aqui el script sigue con what's left)
+            
+            # 1. exa -> eza
+            if "exa" in to_install:
+                    if shutil.which("exa") and not shutil.which("eza"):
+                        print("[Fix] Creando symlink eza -> exa...")
+                        subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/exa", "/usr/local/bin/eza"], check=False)
+            
+            # 2. bat -> batcat
+            if "bat" in to_install:
+                    if shutil.which("batcat") and not shutil.which("bat"):
+                        print("[Fix] Creando symlink bat -> batcat...")
+                        subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/batcat", "/usr/local/bin/bat"], check=False)
+                    
+                    # 3. Instalar Tema Catppuccin Mocha
+                    print("[Theme] Instalando Catppuccin Mocha para bat...")
+                    try:
+                        config_dir = subprocess.check_output(["batcat", "--config-dir"], text=True).strip()
+                    except:
+                        config_dir = "/job/.config/bat" if os.environ.get("HOME") == "/job" else f"{os.environ.get('HOME', '/root')}/.config/bat"
 
+                    themes_dir = f"{config_dir}/themes"
+                    subprocess.run(self.sudo_cmd + ["mkdir", "-p", themes_dir], check=False)
+                    
+                    theme_url = "https://raw.githubusercontent.com/catppuccin/bat/main/themes/Catppuccin%20Mocha.tmTheme"
+                    subprocess.run(self.sudo_cmd + ["curl", "-L", "-o", f"{themes_dir}/Catppuccin Mocha.tmTheme", theme_url], check=False)
+                    
+                    print("[Theme] Reconstruyendo cache de bat...")
+                    subprocess.run(self.sudo_cmd + ["batcat", "cache", "--build"], check=False)
 
-                # 3. tealdeer -> tldr (A veces tealdeer instala 'tldr', a veces no)
-                if "tealdeer" in to_install:
-                     # Check if tldr binary exists, if not try to link tealdeer
-                     if shutil.which("tealdeer") and not shutil.which("tldr"):
-                          print("[Fix] Creando symlink tldr -> tealdeer...")
-                          subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/tealdeer", "/usr/local/bin/tldr"], check=False)
-                     
-                     # Actualizar cache de tldr
-                     print("[TLDR] Actualizando cache (esto puede tardar)...")
-                     import time
-                     for i in range(3):
-                         try:
-                             print(f"   > Intento {i+1}/3...")
-                             subprocess.run(self.sudo_cmd + ["tldr", "--update"], check=True)
-                             print("[TLDR] Cache actualizado.")
-                             break
-                         except subprocess.CalledProcessError:
-                             print(f"   [!] Fallo intento {i+1}. Reintentando en 3s...")
-                             time.sleep(3)
-                     else:
-                         print("[Warning] No se pudo actualizar TLDR. Ejecuta 'tldr --update' manualmente luego.")
-
-
-            except subprocess.CalledProcessError:
-                print("[Error] Fallo APT.")
+            # 3. tealdeer -> tldr
+            if "tealdeer" in to_install:
+                    if shutil.which("tealdeer") and not shutil.which("tldr"):
+                        print("[Fix] Creando symlink tldr -> tealdeer...")
+                        subprocess.run(self.sudo_cmd + ["ln", "-s", "/usr/bin/tealdeer", "/usr/local/bin/tldr"], check=False)
+                    
+                    print("[TLDR] Actualizando cache (esto puede tardar)...")
+                    import time
+                    for i in range(3):
+                        try:
+                            print(f"   > Intento {i+1}/3...")
+                            subprocess.run(self.sudo_cmd + ["tldr", "--update"], check=True)
+                            print("[TLDR] Cache actualizado.")
+                            break
+                        except subprocess.CalledProcessError:
+                            print(f"   [!] Fallo intento {i+1}. Reintentando en 3s...")
+                            time.sleep(3)
+                    else:
+                        print("[Warning] No se pudo actualizar TLDR. Ejecuta 'tldr --update' manualmente luego.")
 
         # 2. Binarios GitHub (Extra)
         for tool in manual_packages:

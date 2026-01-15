@@ -2,7 +2,10 @@ import os
 import shutil
 import time
 import subprocess
-import pwd
+try:
+    import pwd
+except ImportError:
+    pwd = None
 from pathlib import Path
 
 class DotfileManager:
@@ -15,6 +18,12 @@ class DotfileManager:
         self.repo_path = repo_path
         self.home_path = home_path
 
+    def _get_target_user(self):
+        """Devuelve el usuario objetivo (SUDO_USER si existe, o actual)"""
+        if "SUDO_USER" in os.environ:
+            return os.environ["SUDO_USER"]
+        return pwd.getpwuid(os.getuid()).pw_name
+
     def _ensure_dir(self, path: Path):
         """Intenta crear directorio, usando sudo si es necesario."""
         if path.exists():
@@ -23,6 +32,10 @@ class DotfileManager:
         try:
             print(f"[Info] Creando directorio: {path}")
             path.mkdir(parents=True, exist_ok=True)
+            # Fix ownership immediately if created as root for a user
+            user = self._get_target_user()
+            subprocess.run(["chown", "-R", f"{user}:{user}", str(path)], check=False)
+
         except PermissionError:
             print(f"[Warn] Permiso denegado en {path}. Intentando con sudo...")
             try:
@@ -30,10 +43,7 @@ class DotfileManager:
                 subprocess.run(["sudo", "mkdir", "-p", str(path)], check=True)
                 
                 # 2. Corregir permisos (chown al usuario actual)
-                # Detectar usuario actual real (incluso si corremos con sudo)
-                # os.getuid() da el usuario efectivo. Si somos alumno, es alumno.
-                # Si corremos esto, esperamos ser el usuario final.
-                user = pwd.getpwuid(os.getuid()).pw_name
+                user = self._get_target_user()
                 subprocess.run(["sudo", "chown", "-R", f"{user}:{user}", str(path)], check=True)
                 print(f"[Fix] Directorio creado y permisos corregidos para {user}.")
             except Exception as e:
@@ -84,8 +94,9 @@ class DotfileManager:
              try:
                  subprocess.run(["sudo", "ln", "-sf", str(source_file), str(dest_file)], check=True)
                  # Chown del link (usamos -h para no cambiar el target)
-                 user = pwd.getpwuid(os.getuid()).pw_name
-                 subprocess.run(["sudo", "chown", "-h", f"{user}:{user}", str(dest_file)], check=True)
+                 if pwd:
+                     user = self._get_target_user()
+                     subprocess.run(["sudo", "chown", "-h", f"{user}:{user}", str(dest_file)], check=True)
              except Exception as e:
                  print(f"[Error] Fallo enlace con sudo: {e}")
         except Exception as e:

@@ -78,7 +78,7 @@ $SUDO install -o0 -g0 -m755 -d $BINDIR
 $SUDO install -o0 -g0 -m755 -d "$OLLAMA_INSTALL_DIR/lib/ollama"
 status "Downloading Linux ${ARCH} bundle"
 curl --fail --show-error --location --progress-bar \
-    "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-${ARCH}.tgz" | \
+    "https://ollama.com/download/ollama-linux-${ARCH}.tgz" | \
     $SUDO tar -xzf - -C "$OLLAMA_INSTALL_DIR"
 
 if [ "$OLLAMA_INSTALL_DIR/bin/ollama" != "$BINDIR/ollama" ] ; then
