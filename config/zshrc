@@ -1,111 +1,146 @@
-# ==============================================================================
-# CONFIGURACION ZSH - PERSONALIZADA
-# ==============================================================================
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
 
-# Ruta de Oh My Zsh
-# Ruta de Oh My Zsh
+# ==========================================
+# CONFIGURACION BASICA ZSH
+# ==========================================
+
+# Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
-# Asegurar que ~/.local/bin este en el PATH
-export PATH="$HOME/.local/bin:$PATH"
-
-# Tema (puedes cambiarlo si usas Starship, este es el fallback)
-ZSH_THEME="robbyrussell"
+# Theme: Starship (Si esta instalado), sino robbyrussell
+if command -v starship >/dev/null; then
+    ZSH_THEME="" # Desactivamos theme de OMZ para dejar a Starship
+else
+    ZSH_THEME="robbyrussell"
+fi
 
 # Plugins
-plugins=(git)
+plugins=(git z python pip sudo zoxide fzf)
 
 source $ZSH/oh-my-zsh.sh
 
-# ==============================================================================
-# ALIAS Y HERRAMIENTAS MODERNAS
-# ==============================================================================
+# ==========================================
+# HERRAMIENTAS MODERNAS (Si existen)
+# ==========================================
 
-# Reemplazos modernos (ls -> eza, cat -> bat)
-alias ls="eza --icons --group-directories-first"
-alias ll="eza -al --icons --group-directories-first"
-alias cat="batcat"  # Nota: En Debian es batcat, el script de python ya hizo el symlink a 'bat' pero esto asegura compatibilidad
+# 1. Starship (Prompt)
+if command -v starship >/dev/null; then
+    eval "$(starship init zsh)"
+fi
 
-# Zoxide (Reemplazo de cd)
-if command -v zoxide > /dev/null; then
+# 2. Zoxide (Autojump)
+if command -v zoxide >/dev/null; then
     eval "$(zoxide init zsh)"
     alias cd="z"
 fi
 
-# Starship (Prompt)
-if command -v starship > /dev/null; then
-    eval "$(starship init zsh)"
+# 3. FZF (Buscador)
+if command -v fzf >/dev/null; then
+    source <(fzf --zsh)
 fi
 
-# The Fuck (Corrector)
-if command -v thefuck > /dev/null; then
-    eval "$(thefuck --alias)"
+# 4. Eza (ls replacement)
+if command -v eza >/dev/null; then
+    alias ls="eza --icons"
+    alias ll="eza -lh --icons"
+    alias la="eza -lah --icons"
+    alias tree="eza --tree --icons"
 fi
 
-# Tema para Bat
-export BAT_THEME="Catppuccin Mocha"
+# 5. Bat (cat replacement)
+# Debian instala como batcat, otros como bat. Unificamos.
+if command -v batcat >/dev/null; then
+    alias cat="batcat"
+elif command -v bat >/dev/null; then
+    alias cat="bat"
+fi
 
-# ==============================================================================
-# FUNCIONES DE IA (Ollama + Gemini)
-# ==============================================================================
+# 6. The Fuck (Corrector)
+if command -v thefuck >/dev/null; then
+    eval $(thefuck --alias)
+fi
 
-# Funciones de limpieza (Helpers)
-clean_think() { sed '/<think>/,/<\/think>/d'; }
-clean_empty() { sed '/^$/d'; }
+# 7. Tldr (Manuales)
+if command -v tldr >/dev/null; then
+    alias help="tldr"
+fi
 
-# --- QWEN (Local - Rapido) ---
-# Uso: qwen: "pregunta" o solo qwen:
-qwen:() {
-    if [ -n "$1" ]; then
-        # Modo comando: Ejecuta y limpia el "pensamiento"
-        ollama run qwen-local "$*" | clean_think
-    else
-        # Modo chat interactivo
-        ollama run qwen-local
+# ==========================================
+# ALIAS DE IA (Gemini & Ollama)
+# ==========================================
+
+# --- OLLAMA CHECKER ---
+# Helper para iniciar Ollama si no esta corriendo
+check_ollama() {
+    # 1. Check rapido de proceso
+    if pgrep -x "ollama" >/dev/null; then
+        return 0
     fi
-}
-
-# --- GEMMA (Local - Balanceado) ---
-# Uso: gemma: "pregunta" o solo gemma:
-gemma:() {
-    if [ -n "$1" ]; then
-        ollama run gemma-local "$*" | clean_empty
-    else
-        ollama run gemma-local
-    fi
-}
-
-# --- PHI (Local - Logica) ---
-# Uso: phi: "pregunta" o solo phi:
-phi:() {
-    if [ -n "$1" ]; then
-        ollama run phi-local "$*" | clean_empty
-    else
-        ollama run phi-local
-    fi
-}
-
-# --- GEMINI (Nube - Respaldo) ---
-# Uso: gemini: "pregunta" o solo gemini:
-gemini:() {
-    # El script se instala en ~/.local/bin/gemini
-    SCRIPT_PATH="$HOME/.local/bin/gemini"
     
-    if [ ! -f "$SCRIPT_PATH" ]; then
-        echo "[Error] Gemini no esta configurado. Ejecuta el instalador nuevamente."
-        return 1
+    # 2. Check de puerto (por si corre con otro nombre o en contenedor)
+    if command -v curl >/dev/null; then
+        if curl -s localhost:11434 >/dev/null; then
+            return 0
+        fi
     fi
 
-    if [ -n "$1" ]; then
-        # Modo pregunta directa
-        "$SCRIPT_PATH" "$*"
-    else
-        # Modo chat interactivo
-        "$SCRIPT_PATH"
-    fi
+    echo "⏳ Iniciando servidor Ollama..."
+    ollama serve >/dev/null 2>&1 &
+    
+    # Esperar un poco a que arranque
+    for i in {1..5}; do
+        sleep 1
+        if pgrep -x "ollama" >/dev/null; then
+            return 0
+        fi
+    done
+    
+    echo "❌ No se pudo iniciar Ollama."
+    return 1
 }
 
-# Cargar secretos (API Keys) si existen
-if [ -f "$HOME/.brainbash_secrets" ]; then
+# 1. GEMINI (Nube)
+# (El script setup.py crea el alias 'gemini' apuntando al venv)
+# Solo necesitamos asegurarnos que ~/.local/bin este en PATH
+export PATH="$HOME/.local/bin:$PATH"
+
+# 2. MODELOS LOCALES (Ollama)
+# Estos alias llaman a los scripts wrapper creados por el instalador
+
+# Qwen (Coding/Ligero)
+if [ -f "$HOME/.local/bin/qwen" ]; then
+    alias qwen='check_ollama && "$HOME/.local/bin/qwen"'
+fi
+
+# Gemma (Balanceado)
+if [ -f "$HOME/.local/bin/gemma" ]; then
+    alias gemma='check_ollama && "$HOME/.local/bin/gemma"'
+fi
+
+# Phi (Razonamiento)
+if [ -f "$HOME/.local/bin/phi" ]; then
+    alias phi='check_ollama && "$HOME/.local/bin/phi"'
+fi
+
+# Acceso directo al manager de modelos
+alias models="ollama list"
+
+# ==========================================
+# MISC
+# ==========================================
+
+# Cargar secretos (API Key) si existen
+# Intentar cargar desde HOME real primero, por si sudo confunde el ~
+if [ -f "/home/$USER/.brainbash_secrets" ]; then
+    source "/home/$USER/.brainbash_secrets"
+elif [ -f "$HOME/.brainbash_secrets" ]; then
     source "$HOME/.brainbash_secrets"
 fi
+
+# Fix locale
+export LANG=en_US.UTF-8
