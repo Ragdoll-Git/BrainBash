@@ -38,9 +38,14 @@ fi
 INSTALL_DIR="$HOME/.brainbash-temp"
 rm -rf "$INSTALL_DIR"
 
-# 3. Clonar el repositorio
-echo -e "${GREEN}[+] Clonando BrainBash...${NC}"
-git clone --depth=1 https://github.com/Ragdoll-Git/BrainBash.git "$INSTALL_DIR"      #cambiar URL en producción a https://github.com/Ragdoll-Git/BrainBash.git
+# 3. Clonar o Usar Local
+if [ -f "main.py" ]; then
+    echo -e "${BLUE}[DEV] Detectado entorno local. Saltando clonado.${NC}"
+    INSTALL_DIR="."
+else
+    echo -e "${GREEN}[+] Clonando BrainBash...${NC}"
+    git clone --depth=1 https://github.com/Ragdoll-Git/BrainBash.git "$INSTALL_DIR"
+fi
 
 # 4. Ejecutar el script principal (pasando argumentos si los hubo)
 echo -e "${GREEN}[+] Ejecutando instalador Python...${NC}"

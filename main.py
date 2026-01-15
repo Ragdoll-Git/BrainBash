@@ -136,15 +136,53 @@ def get_manager():
     print("Sistemas soportados: Debian/Ubuntu, Fedora/RHEL, Alpine.")
     sys.exit(1)
 
-def install_omz(logger):
-    if (Path.home() / ".oh-my-zsh").exists():
-        logger.info("[Skip] Oh My Zsh ya instalado.")
-        return
-    logger.info("Descargando Oh My Zsh...")
-    subprocess.run('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended', 
-                   shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def get_real_user_info():
+    """Retorna (username, home_dir) del usuario real (SUDO_USER si existe)"""
+    if "SUDO_USER" in os.environ:
+        user = os.environ["SUDO_USER"]
+        import pwd
+        home = pwd.getpwnam(user).pw_dir
+        return user, Path(home)
+    else:
+        return os.getlogin(), Path.home()
 
-def set_default_shell(logger):
+def install_omz(logger, target_user, target_home):
+    omz_dir = target_home / ".oh-my-zsh"
+    if omz_dir.exists():
+        logger.info(f"[Skip] Oh My Zsh ya instalado en {omz_dir}")
+        return
+
+    logger.info(f"Descargando Oh My Zsh para {target_user}...")
+    
+    install_url = "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
+    temp_script = Path("/tmp/install_omz.sh")
+    
+    try:
+        # 1. Descargar script
+        subprocess.run(["curl", "-fsSL", "-o", str(temp_script), install_url], check=True)
+        
+        # 2. Dar permisos (chmod +x)
+        temp_script.chmod(0o755)
+        
+        # 3. Ejecutar como usuario (sin pipes complejos)
+        # KEEP_ZSHRC=yes evita que reemplace el .zshrc que vamos a linkear nosotros despues
+        # RUNZSH=no evita que intente cambiar a zsh inmediatamente
+        cmd = [
+            "sudo", "-u", target_user, 
+            "sh", "-c", 
+            f"export HOME={target_home}; sh {temp_script} --unattended --keep-zshrc"
+        ]
+        
+        subprocess.run(cmd, check=True)
+        logger.success("Oh My Zsh instalado OK.")
+        
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Fallo instalacion OMZ: {e}")
+    finally:
+        if temp_script.exists():
+            temp_script.unlink()
+
+def set_default_shell(logger, target_user):
     """Configura Zsh como shell por defecto y notifica como revertir."""
     try:
         # 1. Detectar path de zsh
@@ -170,70 +208,34 @@ def set_default_shell(logger):
 
         # 2. Verificar shell actual en /etc/passwd (Mas fiable que env SHELL)
         import pwd
-        user_record = pwd.getpwuid(os.getuid())
+        user_record = pwd.getpwnam(target_user)
         current_default_shell = user_record.pw_shell
         
-        logger.info(f"Shell actual: {current_default_shell} | Zsh Path: {zsh_path}")
+        logger.info(f"Shell actual de {target_user}: {current_default_shell} | Zsh Path: {zsh_path}")
 
-        changed_via_chsh = False
         if zsh_path != current_default_shell:
             logger.info(f"Cambiando shell por defecto a {zsh_path}...")
             # 3. Intentar cambio (chsh/usermod)
             try:
-                subprocess.run(["chsh", "-s", zsh_path], check=True)
-                logger.success(f"Shell por defecto cambiado a Zsh. (Reinicia sesión para aplicar)")
-                changed_via_chsh = True
+                subprocess.run(["sudo", "chsh", "-s", zsh_path, target_user], check=True)
+                logger.success(f"Shell por defecto cambiado a Zsh para {target_user}.")
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Fallback: usermod
-                user_name = user_record.pw_name
-                logger.info(f"chsh falló o no existe, intentando usermod para {user_name}...")
+                logger.info(f"chsh falló, intentando usermod para {target_user}...")
                 try:
-                    subprocess.run(["sudo", "usermod", "--shell", zsh_path, user_name], check=True)
+                    subprocess.run(["sudo", "usermod", "--shell", zsh_path, target_user], check=True)
                     logger.success(f"Shell cambiado con usermod.")
-                    changed_via_chsh = True
                 except (subprocess.CalledProcessError, FileNotFoundError):
                     logger.error("Fallo el cambio con chsh y usermod.")
 
-        # 4. Fallback FINAL: .bashrc injection (Para persistencia en entornos hostiles/Docker)
-        # Esto asegura que si entras a bash, te mande a zsh
-        bashrc_path = Path.home() / ".bashrc"
-        marker = "# BrainBash: Auto-start Zsh"
-        
-        should_inject = True
-        if bashrc_path.exists():
-            with open(bashrc_path, "r") as f:
-                if marker in f.read(): should_inject = False
-        
-        if should_inject:
-            logger.info("Agregando fallback de auto-arranque en .bashrc...")
-            # USAMOS DETECCION DINAMICA AHORA (Mas robusto que hardcode)
-            payload = f"""
-\n{marker}
-# Fallback: Busca zsh en el PATH y cambia si existe y es ejecutable
-ZSH_BIN=$(command -v zsh)
-if [ -n "$ZSH_BIN" ] && [ -x "$ZSH_BIN" ] && [ -z "$ZSH_VERSION" ] && [ -t 1 ]; then
-    export SHELL="$ZSH_BIN"
-    exec "$ZSH_BIN"
-fi
-"""
-            try:
-                with open(bashrc_path, "a") as f:
-                    f.write(payload)
-                logger.success("Fallback .bashrc aplicado.")
-            except Exception as e:
-                logger.warning(f"No se pudo escribir .bashrc: {e}")
-        else:
-            logger.info("Fallback .bashrc ya existe.")
-
     except Exception as e:
         logger.warning(f"Error en configuracion de shell: {e}")
-        logger.info(f"Puedes hacerlo manualmente con: chsh -s {zsh_path}")
 
 # ==========================================
 # FUNCIONES DE INSTALACION (MODELOS)
 # ==========================================
 
-def setup_ollama(logger, selected_models):
+def setup_ollama(logger, selected_models, target_user, target_home):
     """Instala Ollama SOLO si hay modelos seleccionados"""
     if not selected_models: return
 
@@ -247,14 +249,18 @@ def setup_ollama(logger, selected_models):
         try:
             # Asegurar que ~/.local/bin este en el PATH para el subprocess
             env = os.environ.copy()
-            user_bin = Path.home() / ".local" / "bin"
+            user_bin = target_home / ".local" / "bin"
             if str(user_bin) not in env["PATH"]:
                 env["PATH"] = f"{user_bin}:{env['PATH']}"
+            
+            # CRITICAL: Run server as the REAL user, not root
+            # This prevents permission issues in ~/.ollama
+            # We use HOME env var so ollama knows where to write
+            # Usamos nohup para que sobreviva a la session actual si es posible
+            cmd = f"sudo -u {target_user} HOME={target_home} nohup ollama serve > ollama.log 2>&1 &"
 
-            # Usamos Popen para no bloquear, redirigiendo salida a archivo para debug
-            log_path = Path("ollama.log")
-            with open(log_path, "w") as log_file:
-                 subprocess.Popen(["ollama", "serve"], stdout=log_file, stderr=subprocess.STDOUT, env=env)
+            # Usamos Popen para no bloquear
+            subprocess.Popen(cmd, shell=True, env=env)
         except Exception as e:
             logger.error(f"No se pudo iniciar Ollama: {e}")
             return False
@@ -279,7 +285,7 @@ def setup_ollama(logger, selected_models):
 
     # 1. Instalar Motor si falta
     # Verificamos PATH manual
-    user_bin = Path.home() / ".local" / "bin"
+    user_bin = target_home / ".local" / "bin"
     ollama_bin = user_bin / "ollama"
 
     # ASEGURAR PATH GLOBALMENTE (Siempre, por si acaso)
@@ -323,7 +329,7 @@ def setup_ollama(logger, selected_models):
                 if arch == "x86_64": arch = "amd64"
                 elif arch in ["aarch64", "arm64"]: arch = "arm64"
                 
-                url = f"https://github.com/ollama/ollama/releases/latest/download/ollama-linux-{arch}.tgz"
+                url = f"https://ollama.com/download/ollama-linux-{arch}.tgz"
                 
                 # Dir temporal
                 import tempfile
@@ -369,7 +375,7 @@ def setup_ollama(logger, selected_models):
          return
 
     # 2. Leer contexto compartido
-    context_path = Path.home() / ".config" / "brainbash" / "context.md"
+    context_path = target_home / ".config" / "brainbash" / "context.md"
     system_prompt = ""
     if context_path.exists():
         try:
@@ -379,6 +385,8 @@ def setup_ollama(logger, selected_models):
                 logger.info("Contexto compartido cargado.")
         except Exception as e:
             logger.error(f"Error leyendo contexto: {e}")
+    else:
+        logger.warning(f"No se encontro contexto en {context_path}")
 
     # 3. Descargar Modelos y crear alias
     logger.info("Verificando servicio IA...")
@@ -436,8 +444,10 @@ def setup_ollama(logger, selected_models):
                     subprocess.run(f"ollama cp {tag_original} {tag_alias}", shell=True, check=True)
                 
                 # 3. Crear wrapper (script ejecutable)
-                bin_dir = Path.home() / ".local" / "bin"
+                bin_dir = target_home / ".local" / "bin"
                 bin_dir.mkdir(parents=True, exist_ok=True)
+                
+                subprocess.run(["chown", "-R", f"{target_user}:{target_user}", str(bin_dir)], check=False)
                 
                 wrapper_path = bin_dir / menu_id
                 logger.info(f"Creando comando: {menu_id}...")
@@ -448,11 +458,13 @@ def setup_ollama(logger, selected_models):
                 
                 # Hacer ejecutable (+x)
                 wrapper_path.chmod(0o755)
+                # Fix ownership
+                subprocess.run(["chown", f"{target_user}:{target_user}", str(wrapper_path)], check=False)
 
             except subprocess.CalledProcessError as e:
                 logger.error(f"Fallo al configurar {tag_alias}: {e}")
 
-def setup_gemini(logger, tui, api_key=None):
+def setup_gemini(logger, tui, real_user, real_home, api_key=None):
     """Configura Gemini usando el script src/gemini_tool.py"""
     logger.step("Configurando Gemini (Google AI)")
     
@@ -461,31 +473,44 @@ def setup_gemini(logger, tui, api_key=None):
         print("\n--- Configuracion de API Key ---")
         print("Si tienes una API Key de Google Gemini, ingrésala ahora.")
         print("Si no, presiona Enter para configurar después.")
-        api_key = input("API Key > ").strip()
+        
+        # Intentar restaurar terminal antes de input
+        try:
+            subprocess.run(["stty", "sane"], check=False)
+        except: pass
+
+        try:
+            api_key = input("API Key > ").strip()
+        except EOFError:
+            print("\n[Warn] No se detecto entrada interactiva. Saltando.")
+            api_key = ""
+        except Exception:
+             api_key = ""
     
     if api_key:
-        secrets_path = Path.home() / ".brainbash_secrets"
+        secrets_path = real_home / ".brainbash_secrets"
         try:
-            # Escribir en archivo de secretos (siempre override o append, aqui simplificamos create)
             with open(secrets_path, "w") as f:
                 f.write(f"export GEMINI_API_KEY='{api_key}'\n")
-            logger.success("API Key guardada en ~/.brainbash_secrets")
+            
+            subprocess.run(["chown", f"{real_user}:{real_user}", str(secrets_path)], check=False)
+            logger.success(f"API Key guardada en {secrets_path}")
         except Exception as e:
             print(f"[Error] No se pudo guardar la Key: {e}")
     else:
         print("[INFO] Saltando configuración de Key. Recuerda agregarla manualmente luego en ~/.brainbash_secrets")
     
     # 1. Definir rutas
-    # Ubicacion del codigo fuente en tu proyecto
     source_script = Path(__file__).parent / "src" / "gemini_tool.py"
     
     # Destinos
-    venv_path = Path.home() / ".gemini-cli" / "venv" 
-    bin_dir = Path.home() / ".local" / "bin"
+    venv_path = real_home / ".gemini-cli" / "venv" 
+    bin_dir = real_home / ".local" / "bin"
     dest_script = bin_dir / "gemini" 
     
     # Asegurar directorios
     bin_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["chown", "-R", f"{real_user}:{real_user}", str(bin_dir)], check=False)
     
     if not source_script.exists():
         logger.error(f"No se encontro el archivo fuente: {source_script}")
@@ -496,6 +521,7 @@ def setup_gemini(logger, tui, api_key=None):
         logger.info("Creando entorno virtual...")
         try:
             subprocess.run(["python3", "-m", "venv", str(venv_path)], check=True)
+            subprocess.run(["chown", "-R", f"{real_user}:{real_user}", str(venv_path)], check=False)
         except Exception as e:
             logger.error(f"Error creando venv: {e}")
             return
@@ -530,82 +556,17 @@ def setup_gemini(logger, tui, api_key=None):
             
         # Hacemos ejecutable
         dest_script.chmod(0o755)
+        
+        subprocess.run(["chown", "-R", f"{real_user}:{real_user}", str(venv_path)], check=False)
+        subprocess.run(["chown", f"{real_user}:{real_user}", str(dest_script)], check=False)
+        
         logger.success("Gemini instalado correctamente.")
         
     except Exception as e:
         logger.error(f"Error al instalar script: {e}")
-
-# ==========================================
-# MAIN LOOP
-# ==========================================
-
-def main():
-    manager = get_manager()
-    tui = TUI()
-    logger = Logger(Colors.GREEN)
-
-    # ESTADO INICIAL
-    state = {
-        "update_sys": False, # Por defecto NO actualiza
-        "pkgs_base": [x[0] for x in MENU_BASE],  # Por defecto todos ON
-        "pkgs_extra": [x[0] for x in MENU_EXTRA], # Por defecto todos ON
-        "models": [],       # Por defecto ningun modelo local
-        "use_gemini": True, # Gemini SI por defecto
-        "dotfiles": True    # Dotfiles SI por defecto
-    }
-
-# ==========================================
-# LOGICA PRINCIPAL DE EJECUCION
-# ==========================================
-
-def run_execution_phase(state, manager, logger, tui):
-    """
-    Ejecuta el proceso de instalacion basado en el estado (state).
-    Separado de main() para permitir testing automatizado.
-    """
-    logger.step("INICIANDO DESPLIEGUE")
-
-    # 1. Update (Opcional)
-    if state["update_sys"]:
-        manager.update()
-
-    # 2. Paquetes (Base + Extra combinados)
-    all_pkgs = state["pkgs_base"] + state["pkgs_extra"]
-    if all_pkgs:
-        logger.step("Instalando Paquetes")
-        manager.install(all_pkgs)
-
-    # 3. Shell (OMZ) - Se instala si seleccionó Zsh
-    if "zsh" in state["pkgs_base"]:
-        logger.step("Configurando Shell")
-        install_omz(logger)
-        set_default_shell(logger)
-
-    # 4. Dotfiles
-    if state["dotfiles"]:
-        logger.step("Aplicando Config. Personales")
-        # Asumiendo que main.py esta en la raiz del repo
-        repo_root = Path(__file__).parent.resolve()
-        dm = DotfileManager(repo_root, Path.home())
         
-        for src, dest in DOTFILES_MAP.items():
-            dm.link(f"config/{src}", dest)
-        logger.success("Configs aplicadas.")
-
-    # 5. IA Local (Ollama + Modelos)
-    if state["models"]:
-        logger.step("Configurando IA Local")
-        setup_ollama(logger, state["models"])
-
-    # 6. IA Nube (Gemini)
-    if state["use_gemini"]:
-        # Pasamos API Key si esta en state (para tests) o None (para prompt interactivo)
-        api_key = state.get("gemini_api_key") 
-        setup_gemini(logger, tui, api_key=api_key)
-
-    logger.step("FINALIZADO")
-    logger.info("Reinicia tu terminal para ver los cambios.")
-    print("\n[TIP] Para revertir tu shell a Bash, ejecuta: chsh -s $(which bash)")
+    try: subprocess.run(["stty", "sane"], check=False)
+    except: pass
 
 # ==========================================
 # MAIN LOOP
@@ -635,7 +596,14 @@ def main():
         s_update = "SI" if state["update_sys"] else "NO"
         s_dots = "SI" if state["dotfiles"] else "NO"
 
-        prefix = "sudo " if os.geteuid() != 0 else ""
+        if isinstance(manager, DebianManager):
+            cmd_label = "apt update && apt upgrade"
+        elif isinstance(manager, FedoraManager):
+             cmd_label = "dnf update"
+        elif isinstance(manager, AlpineManager):
+             cmd_label = "apk update"
+        else:
+             cmd_label = "System Update"
 
         # Alineacion visual (Padding) dinamica segun resolucion
         cols, _ = shutil.get_terminal_size((80, 24))
@@ -645,7 +613,7 @@ def main():
         align_w = min(55, max(40, box_w - 25))
         
         main_menu_opts = [
-            (TXT_UPDATE,  f"{prefix} update & upgrade".ljust(align_w) + f"[{s_update}]"),
+            (TXT_UPDATE,  f"{cmd_label}".ljust(align_w) + f"[{s_update}]"),
             (TXT_BASE,    f"Git, Python, Zsh, Curl".ljust(align_w) + f"[{c_base} seleccionados]"),
             (TXT_EXTRA,   f"Eza, Bat, Fzf, Tldr, Zoxide, Htop".ljust(align_w) + f"[{c_extra} seleccionados]"),
             (TXT_DOTS,    f"Configuraciones personales".ljust(align_w) + f"[{s_dots}]"),
@@ -720,6 +688,10 @@ def run_execution_phase(state, manager, logger, tui):
     Separado de main() para permitir testing automatizado.
     """
     logger.step("INICIANDO DESPLIEGUE")
+    
+    # Obtener usuario real (SUDO fallback)
+    real_user, real_home = get_real_user_info()
+    logger.info(f"Usuario destino: {real_user} ({real_home})")
 
     # 1. Update (Opcional)
     if state["update_sys"]:
@@ -734,15 +706,17 @@ def run_execution_phase(state, manager, logger, tui):
     # 3. Shell (OMZ) - Se instala si seleccionó Zsh
     if "zsh" in state["pkgs_base"]:
         logger.step("Configurando Shell")
-        install_omz(logger)
-        set_default_shell(logger)
+        install_omz(logger, real_user, real_home)
+        set_default_shell(logger, real_user)
 
     # 4. Dotfiles
     if state["dotfiles"]:
         logger.step("Aplicando Config. Personales")
         # Asumiendo que main.py esta en la raiz del repo
         repo_root = Path(__file__).parent.resolve()
-        dm = DotfileManager(repo_root, Path.home())
+        
+        # Usamos real_home para que los dotfiles vayan al usuario, no a root
+        dm = DotfileManager(repo_root, real_home)
         
         for src, dest in DOTFILES_MAP.items():
             dm.link(f"config/{src}", dest)
@@ -751,13 +725,13 @@ def run_execution_phase(state, manager, logger, tui):
     # 5. IA Local (Ollama + Modelos)
     if state["models"]:
         logger.step("Configurando IA Local")
-        setup_ollama(logger, state["models"])
+        setup_ollama(logger, state["models"], real_user, real_home)
 
     # 6. IA Nube (Gemini)
     if state["use_gemini"]:
         # Pasamos API Key si esta en state (para tests) o None (para prompt interactivo)
         api_key = state.get("gemini_api_key") 
-        setup_gemini(logger, tui, api_key=api_key)
+        setup_gemini(logger, tui, real_user, real_home, api_key=api_key)
 
     logger.step("FINALIZADO")
     logger.info("Reinicia tu terminal para ver los cambios.")
