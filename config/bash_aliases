@@ -1,0 +1,27 @@
+# AI Commands
+alias gemini="gemini"
+alias qwen="qwen"
+alias gemma="gemma"
+alias phi="phi"
+
+# Strict syntax (colon required) -> mapped to standard command
+alias gemini:="gemini"
+alias qwen:="qwen"
+alias gemma:="gemma"
+alias phi:="phi"
+
+# Zoxide (Smart directory jumper)
+eval "$(zoxide init bash)"
+
+# Eza (Ls replacement)
+if command -v eza &> /dev/null; then
+    alias ls="eza --icons"
+    alias ll="eza -l --icons --git -a"
+fi
+
+# Bat (Cat replacement)
+if command -v batcat &> /dev/null; then
+  alias cat="batcat"
+elif command -v bat &> /dev/null; then
+  alias cat="bat"
+fi

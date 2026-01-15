@@ -115,7 +115,9 @@ class PackageManager(ABC):
                 target = fonts_dir / font
                 if not target.exists():
                     self._log_info(f"   > Descargando {font}...")
-                    subprocess.run(["curl", "-fLo", str(target), f"{base_url}/{font}"], check=True)
+                    # Encode spaces in URL
+                    encoded_font = font.replace(" ", "%20")
+                    subprocess.run(["curl", "-fLo", str(target), f"{base_url}/{encoded_font}"], check=True)
             
             # Refrescar cache
             self._log_info("   > Actualizando cache de fuentes...")

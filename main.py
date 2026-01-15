@@ -87,10 +87,12 @@ MODEL_PARAMS = {
     "phi": ""
 }
 
+# Mapeo de archivos: Origen (repo/config) -> Destino (home)
 DOTFILES_MAP = {
     "zshrc": ".zshrc",
     "kitty.conf": ".config/kitty/kitty.conf",
     "starship.toml": ".config/starship.toml",
+    "bash_aliases": ".bash_aliases",
     "context.md": ".config/brainbash/context.md"
 }
 
