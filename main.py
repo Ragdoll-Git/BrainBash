@@ -492,7 +492,9 @@ def setup_gemini(logger, tui, real_user, real_home, api_key=None):
     if api_key:
         secrets_path = real_home / ".brainbash_secrets"
         try:
-            with open(secrets_path, "w") as f:
+            # Secure file creation with 600 permissions
+            fd = os.open(secrets_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
                 f.write(f"export GEMINI_API_KEY='{api_key}'\n")
             
             subprocess.run(["chown", f"{real_user}:{real_user}", str(secrets_path)], check=False)
