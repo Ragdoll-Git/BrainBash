@@ -12,7 +12,6 @@ import time
 import textwrap
 
 from pathlib import Path
-from src.managers import DebianManager, AlpineManager, FedoraManager
 from src.utils import Logger, Colors, TUI
 from src.dotfiles import DotfileManager
 
@@ -120,14 +119,17 @@ def get_manager():
         
         # 1. Alpine
         if distro_id == "alpine":
+            from src.managers.alpine import AlpineManager
             return AlpineManager("alpine")
             
         # 2. Fedora / RedHat family
         if distro_id in ["fedora", "rhel", "centos", "almalinux", "rocky"] or "fedora" in distro_like:
+            from src.managers.fedora import FedoraManager
             return FedoraManager("fedora")
             
         # 3. Debian / Ubuntu family
         if distro_id in ["debian", "ubuntu", "linuxmint", "pop", "kali"] or "debian" in distro_like or "ubuntu" in distro_like:
+            from src.managers.debian import DebianManager
             return DebianManager("debian")
             
     except Exception as e:
@@ -492,7 +494,9 @@ def setup_gemini(logger, tui, real_user, real_home, api_key=None):
     if api_key:
         secrets_path = real_home / ".brainbash_secrets"
         try:
-            with open(secrets_path, "w") as f:
+            # Secure file creation with 600 permissions
+            fd = os.open(secrets_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
                 f.write(f"export GEMINI_API_KEY='{api_key}'\n")
             
             subprocess.run(["chown", f"{real_user}:{real_user}", str(secrets_path)], check=False)
@@ -601,11 +605,13 @@ def main():
         s_update = "SI" if state["update_sys"] else "NO"
         s_dots = "SI" if state["dotfiles"] else "NO"
 
-        if isinstance(manager, DebianManager):
+        # Use type name check to avoid importing all manager classes
+        mgr_type = type(manager).__name__
+        if mgr_type == "DebianManager":
             cmd_label = "apt update && apt upgrade"
-        elif isinstance(manager, FedoraManager):
+        elif mgr_type == "FedoraManager":
              cmd_label = "dnf update"
-        elif isinstance(manager, AlpineManager):
+        elif mgr_type == "AlpineManager":
              cmd_label = "apk update"
         else:
              cmd_label = "System Update"
