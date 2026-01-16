@@ -1,3 +1,0 @@
-## 2024-05-23 - Lazy Loading Managers
-**Learning:** Python imports at the top level are blocking and can significantly slow down CLI startup times, especially when importing large or multiple modules that are mutually exclusive (like different distro managers). Lazy loading inside the factory function (`get_manager`) and avoiding `__init__.py` imports allows the interpreter to parse only the necessary code.
-**Action:** When designing CLI tools with modular backends, avoid importing all backends in `__init__.py`. Instead, use local imports in the selection logic and use string-based type checking or protocol-based checking in the main loop to avoid needing the classes for `isinstance`.
